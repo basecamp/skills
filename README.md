@@ -1,4 +1,4 @@
-# Basecamp Skills for Claude Code
+# Agent Skills for Basecamp
 
 Skills that extend [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 with Basecamp project management capabilities — todos, cards, messages,
