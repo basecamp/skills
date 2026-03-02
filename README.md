@@ -1,8 +1,7 @@
 # Agent Skills for Basecamp
 
-Skills that extend [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-with Basecamp project management capabilities — todos, cards, messages,
-schedule, campfire, and more.
+[Agent skills](https://agentskills.io) for Basecamp project management —
+todos, cards, messages, schedule, campfire, and more.
 
 See [install.md](install.md) for setup instructions.
 
