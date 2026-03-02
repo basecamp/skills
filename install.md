@@ -1,12 +1,11 @@
 # Installation
 
-## As a plugin (recommended)
+## As a plugin
 
-```bash
-/install-plugin github:basecamp/skills
 ```
-
-This installs all skills and keeps them updated.
+/plugin marketplace add basecamp/skills
+/plugin install basecamp-skills@basecamp-skills
+```
 
 ## Manual installation
 
@@ -42,9 +41,9 @@ re-copy after pulling.
 
 ## Prerequisites
 
-The **basecamp** skill requires the [Basecamp CLI](https://github.com/basecamp/basecamp-cli):
+The **basecamp** skill requires the [Basecamp CLI](https://github.com/basecamp/basecamp-cli).
+See [install instructions](https://github.com/basecamp/basecamp-cli#installation).
 
 ```bash
-brew install basecamp/tap/basecamp
 basecamp auth login
 ```

@@ -4,23 +4,17 @@ Skills that extend [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 with Basecamp project management capabilities — todos, cards, messages,
 schedule, campfire, and more.
 
-## Quick start
-
-```
-/install-plugin github:basecamp/skills
-```
-
-Or see [INSTALL.md](INSTALL.md) for manual installation.
+See [install.md](install.md) for setup instructions.
 
 ## Available skills
 
 | Skill | Description |
 |-------|-------------|
-| [basecamp](skills/basecamp/SKILL.md) | Full Basecamp CLI integration — 130 endpoints across todos, cards, messages, files, schedule, check-ins, timeline, recordings, templates, webhooks, subscriptions, lineup, and campfire. |
+| [basecamp](skills/basecamp/SKILL.md) | Full Basecamp CLI integration — todos, cards, messages, files, schedule, check-ins, timeline, recordings, templates, webhooks, subscriptions, lineup, and campfire. |
 
 ## Requires
 
-- [Basecamp CLI](https://github.com/basecamp/basecamp-cli) (`brew install basecamp/tap/basecamp`)
+- [Basecamp CLI](https://github.com/basecamp/basecamp-cli) (see [install instructions](https://github.com/basecamp/basecamp-cli#installation))
 - An authenticated Basecamp account (`basecamp auth login`)
 
 ## About
