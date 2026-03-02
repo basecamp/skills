@@ -66,7 +66,7 @@ cd ~/.basecamp-skills && git pull
 **Verify:**
 ```bash
 ls ~/.basecamp-skills/skills/basecamp/SKILL.md
-# Expected: /Users/you/.basecamp-skills/skills/basecamp/SKILL.md
+# Expected: $HOME/.basecamp-skills/skills/basecamp/SKILL.md
 ```
 
 ## Step 3: Symlink skills into agent
@@ -85,7 +85,7 @@ For agents other than Claude Code, symlink or copy skill directories from `~/.ba
 **Verify:**
 ```bash
 ls ~/.claude/skills/basecamp/SKILL.md
-# Expected: /Users/you/.claude/skills/basecamp/SKILL.md
+# Expected: $HOME/.claude/skills/basecamp/SKILL.md
 ```
 
 Restart your agent session to pick up the new skills. The basecamp skill provides full CLI coverage: projects, todos, cards, messages, files, schedule, check-ins, timeline, recordings, templates, webhooks, subscriptions, lineup, and campfire.
