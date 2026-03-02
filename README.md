@@ -3,7 +3,11 @@
 [Agent skills](https://agentskills.io) for Basecamp project management —
 todos, cards, messages, schedule, campfire, and more.
 
-See [install.md](install.md) for setup instructions.
+```
+npx skills add basecamp/skills
+```
+
+See [install.md](install.md) for full setup instructions including CLI authentication.
 
 ## Available skills
 
