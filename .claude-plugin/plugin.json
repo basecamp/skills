@@ -1,0 +1,12 @@
+{
+  "name": "basecamp-skills",
+  "version": "0.1.0",
+  "description": "Basecamp skills for Claude Code — project management, todos, cards, messages, and more.",
+  "author": {
+    "name": "37signals",
+    "email": "support@37signals.com"
+  },
+  "homepage": "https://github.com/basecamp/skills",
+  "repository": "https://github.com/basecamp/skills",
+  "license": "MIT"
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "basecamp-skills",
+  "metadata": {
+    "description": "Basecamp skills for Claude Code",
+    "version": "0.1.0"
+  },
+  "owner": {
+    "name": "37signals",
+    "email": "support@37signals.com"
+  },
+  "plugins": [
+    {
+      "name": "basecamp-skills",
+      "description": "Basecamp skills for Claude Code — project management, todos, cards, messages, and more.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
