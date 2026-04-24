@@ -18,7 +18,7 @@ Check if the Basecamp CLI is already installed:
 basecamp --version
 ```
 
-If `basecamp` is not installed, install it. See the [Basecamp CLI install guide](https://github.com/basecamp/basecamp-cli/blob/main/INSTALL.md) for full options, or use Homebrew:
+If `basecamp` is not installed, install it. See the [Basecamp CLI install guide](https://github.com/basecamp/basecamp-cli/blob/main/install.md) for full options, or use Homebrew:
 
 ```bash
 brew install --cask basecamp/tap/basecamp
