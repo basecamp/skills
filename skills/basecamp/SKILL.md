@@ -3,19 +3,19 @@ name: basecamp
 description: |
   Interact with Basecamp via the Basecamp CLI. Full API coverage: projects, todos, cards,
   messages, files, schedule, check-ins, timeline, recordings, templates, webhooks,
-  subscriptions, lineup, chat, gauges, assignments, notifications, and accounts.
+  subscriptions, lineup, chat, pings, gauges, assignments, notifications, and accounts.
   Use for ANY Basecamp question or action.
 triggers:
   # Direct invocations
   - basecamp
   - /basecamp
   # Resource actions
-  - basecamp todo
+  - basecamp todos
   - basecamp project
-  - basecamp card
+  - basecamp cards
   - basecamp chat
   - basecamp campfire
-  - basecamp message
+  - basecamp messages
   - basecamp file
   - basecamp document
   - basecamp schedule
@@ -75,7 +75,7 @@ argument-hint: "[action] [args...]"
 
 # /basecamp - Basecamp Workflow Command
 
-Full CLI coverage: 155 endpoints across todos, cards, messages, files, schedule, check-ins, timeline, recordings, templates, webhooks, subscriptions, lineup, chat, gauges, assignments, notifications, and accounts.
+Full CLI coverage: 155 endpoints across todos, cards, messages, files, schedule, check-ins, timeline, recordings, templates, webhooks, subscriptions, lineup, chat, pings, gauges, assignments, notifications, and accounts.
 
 ## Agent Invariants
 
@@ -85,13 +85,28 @@ Full CLI coverage: 155 endpoints across todos, cards, messages, files, schedule,
 2. **Parse URLs first** with `basecamp url parse "<url>"` to extract IDs
 3. **Comments are flat** - reply to parent recording, not to comments
 4. **Check context** via `.basecamp/config.json` before assuming project
-5. **Content fields accept Markdown and @mentions** — message body and comment content accept Markdown syntax; the CLI converts to HTML automatically. Use Markdown formatting (lists, bold, links, code blocks) for rich content. Four mention syntaxes are available (prefer deterministic for agents):
+5. **Content fields accept Markdown and @mentions** — message body and comment content accept Markdown syntax; the CLI converts to HTML automatically. Use Markdown formatting (lists, bold, links, code blocks, tables) for rich content. Four mention syntaxes are available (prefer deterministic for agents):
    - **`[@Name](mention:SGID)`** — zero API calls, embeds SGID directly (preferred for agents)
    - **`[@Name](person:ID)`** — one API call, resolves person ID to SGID via pingable set
    - **`@sgid:VALUE`** — inline SGID embed for pipeline composability
    - **`@Name` / `@First.Last`** — fuzzy name resolution (may be ambiguous)
    For todos, documents, and cards, content is sent as-is — use plain text or HTML directly.
-6. **Project scope is mandatory for most commands** — via `--in <project>` or `.basecamp/config.json`. Cross-project exceptions: `basecamp reports assigned` for assigned work, `basecamp assignments` for structured assignment views, `basecamp reports overdue` for overdue todos, `basecamp reports schedule` for upcoming schedule across all projects, `basecamp recordings <type>` for browsing by type, `basecamp notifications` for notifications, `basecamp gauges list` for account-wide gauges.
+
+   **Table boundary:** GFM tables render in message/comment bodies, but the TUI
+   in-place editors **refuse to open** table-bearing content (edit it on Basecamp
+   web, or replace the whole field via `messages update` / `comments update` /
+   `todos update --description`, which take fresh content and are unaffected), and
+   human-readable CLI/TUI **display** of such content may lose table structure —
+   both pending server-side Markdown support (BC3 #11986).
+
+   **Multiline / non-ASCII content:** do not rely on bash ANSI-C quoting (`$'...\n...'`) — it is a bash/zsh extension. Under a POSIX `/bin/sh` (dash, busybox-ash, common in sandboxes) the `$` is passed through literally and posts a stray leading `$`, and `\n` stays a literal backslash-n. Pipe the content via stdin instead, using `-` as the content argument:
+   ```bash
+   printf '%s\n' '海报 mockup 方向稿：' '' '<bc-attachment ...>' | basecamp comments create <recording_id> - --in <project> --json
+   ```
+6. **Project scope is mandatory for most commands** — via `--in <project>` or `.basecamp/config.json`. Cross-project exceptions: `basecamp reports assigned` for assigned work, `basecamp assignments` for structured assignment views, `basecamp reports overdue` for overdue todos, `basecamp reports schedule` for upcoming schedule across all projects, `basecamp recordings <type>` for browsing by type, `basecamp notifications` for notifications, `basecamp gauges list` for account-wide gauges, and the seven list commands covered in item 7.
+7. **Account-wide listing.** `basecamp todos list --all-projects --json` lists across every project; the same flag does the same on `cards list`, `messages list`, `comments list`, `files list`, `forwards list`, and `checkins answers`. It overrides a configured project, and with no project in scope those commands already list account-wide rather than prompting. Flags that name something inside a single project are rejected there rather than silently ignored.
+   Account-wide listings return **the first 100 items by default** — account-wide "all" is the whole account, not one project's worth. Use `--limit N` to raise the cap (it walks pages until N are collected) or `--all` for everything. `--page N` fetches exactly one page, but only on the paginated listings.
+   The two overdue variants — `basecamp todos list --all-projects --overdue` and `basecamp cards list --all-projects --overdue` — come from unpaginated endpoints. They accept `--limit` and `--all` but **reject `--page`**, so do not generate `--page` against them.
 
 ### Output Modes
 
@@ -106,6 +121,8 @@ Full CLI coverage: 155 endpoints across todos, cards, messages, files, schedule,
 | Automation / scripting | `--agent` | Success: raw JSON data (no envelope); errors: `{ok:false,...}` object; no interactive prompts |
 
 Always pass `--json` or `--md` explicitly — auto-detection depends on config and may not produce the format you expect. Use `--md` when composing reports, summarizing data, or displaying results inline. `--agent` is for headless integration scripts.
+
+**Avoiding interactive prompts.** The flags `--agent`/`--json`/`--quiet`/`--ids-only`/`--count` and the environment variable `BASECAMP_NONINTERACTIVE=1` suppress interactive selection prompts. `--md` does **not** — if a required target is ambiguous (e.g. a project with multiple todosets and no `--todoset`), and the CLI is attached to a terminal, it will show a blocking picker. When you need Markdown output *and* no prompts, either pass the flag that names whatever is ambiguous (`--todoset <id>` for the todoset case above, or `--in <project>` / `--list <id>` when the project or list is ambiguous) or set `BASECAMP_NONINTERACTIVE=1` in the environment. `BASECAMP_NONINTERACTIVE` disables all prompts (they become actionable errors instead) without changing the output format — an escape hatch for agents running under a PTY.
 
 **Other modes:** `--quiet` (success: raw JSON, no envelope; errors: `{ok:false,...}`), `--ids-only`, `--count`, `--stats` (session statistics), `--styled` (force ANSI), `-v` / `-vv` (verbose/trace), `--jq '<expr>'` (built-in jq filter — see below).
 
@@ -141,10 +158,13 @@ basecamp <cmd> --page 1     # First page only, no auto-pagination
 - `--assignee me` resolves to current user
 - `--due tomorrow` / `--due +3` / `--due "next week"` - natural date parsing
 - Project from `.basecamp/config.json` if `--in` not specified
+- Multiple identities use named profiles: `basecamp profile create <name>`, then select one with global `--profile <name>` or `BASECAMP_PROFILE=<name>`.
 
 ## Quick Reference
 
 > **Note:** Most queries require project scope (via `--in <project>` or `.basecamp/config.json`). Cross-project exceptions: `basecamp reports assigned`, `basecamp assignments`, `basecamp reports overdue`, `basecamp reports schedule`, `basecamp recordings <type>`, `basecamp notifications`, `basecamp gauges list`.
+>
+> Seven list commands also list account-wide: `basecamp todos list --all-projects --json`, and likewise `cards list`, `messages list`, `comments list`, `files list`, `forwards list`, and `checkins answers`.
 
 | Task | Command |
 |------|---------|
@@ -152,24 +172,31 @@ basecamp <cmd> --page 1     # First page only, no auto-pagination
 | My todos (in project) | `basecamp todos list --assignee me --in <project> --json` |
 | My todos (cross-project) | `basecamp reports assigned --json` (defaults to "me") |
 | My schedule (cross-project) | `basecamp reports schedule --json` (upcoming events across all projects) |
-| All todos (cross-project) | `basecamp recordings todos --json` (no assignee data — cannot filter by person) |
+| All todos (cross-project) | `basecamp todos list --all-projects --json` (grouped by project) |
 | Overdue todos (in project) | `basecamp todos list --overdue --in <project> --json` |
-| Overdue todos (cross-project) | `basecamp reports overdue --json` |
+| Overdue todos (cross-project) | `basecamp todos list --all-projects --overdue --json` (flat, oldest first) or `basecamp reports overdue --json` (bucketed by lateness) |
+| All cards (cross-project) | `basecamp cards list --all-projects --json` (grouped by project) |
 | Assign todo | `basecamp assign <id> [id...] --to <person> --in <project> --json` |
 | Assign card | `basecamp assign <id> [id...] --card --to <person> --in <project> --json` |
 | Assign card step | `basecamp assign <id> [id...] --step --to <person> --in <project> --json` |
-| Create todo | `basecamp todo "Task" --in <project> --list <list> --json` |
+| Create todo | `basecamp todos create "Task" --in <project> --list <list> --json` |
 | Create todolist | `basecamp todolists create "Name" --in <project> --json` |
-| Complete todo | `basecamp done <id> --json` |
+| Complete todo | `basecamp todos complete <id> --json` |
 | List cards | `basecamp cards list --in <project> --json` |
-| Create card | `basecamp card "Title" --in <project> --json` |
+| Create card | `basecamp cards create "Title" --in <project> --json` |
+| Complete card | `basecamp cards done <id|url> --in <project> --json` |
 | Move card | `basecamp cards move <id> --to <column> [--position N] --in <project> --json` |
 | Move card to on-hold | `basecamp cards move <id> --on-hold --in <project> --json` |
-| Post message | `basecamp message "Title" "Body" --in <project> --json` |
-| Post with @mention | `basecamp message "Title" "Hey @First.Last, ..." --in <project> --json` |
-| Post silently | `basecamp message "Title" "Body" --no-subscribe --in <project> --json` |
+| Move card to another project | `basecamp cards move <id> --to-wormhole <wormhole_id> --in <project> --json` (async teleport) |
+| Post message | `basecamp messages create "Title" "Body" --in <project> --json` |
+| Post with @mention | `basecamp messages create "Title" "Hey @First.Last, ..." --in <project> --json` |
+| Post silently | `basecamp messages create "Title" "Body" --no-subscribe --in <project> --json` |
 | Post to chat | `basecamp chat post "Message" --in <project> --json` |
-| Add comment | `basecamp comment <recording_id> "Text" --in <project> --json` |
+| List pings | `basecamp notifications --json --jq '.data.reads[]? | select(.section == "pings")'` |
+| Read ping thread | `basecamp api get "/buckets/<circle_id>/chats/<chat_id>/lines.json" --agent` |
+| Post to ping thread | `basecamp api post "/buckets/<circle_id>/chats/<chat_id>/lines.json" --data '{"content":"<p>message</p>"}' --json` |
+| Add comment | `basecamp comments create <recording_id> "Text" --in <project> --json` |
+| Inspect comment / reply atoms | `basecamp comments show <url> --json` → `reply_target` + `mention` in `.data` |
 | List attachments | `basecamp attachments list <id\|url> --json` |
 | Download attachments | `basecamp attachments download <id> --out /tmp/` |
 | Show + download | `basecamp todos show <id> --download-attachments --json` |
@@ -185,6 +212,7 @@ basecamp <cmd> --page 1     # First page only, no auto-pagination
 | Completed assignments | `basecamp assignments completed --json` |
 | Notifications | `basecamp notifications --json` |
 | Mark notification read | `basecamp notifications read <id> --json` |
+| All bubble-ups (BC5) | `basecamp notifications bubbleups --json` |
 | Gauges (account-wide) | `basecamp gauges list --json` |
 | Gauge needles | `basecamp gauges needles --in <project> --json` |
 | Create needle | `basecamp gauges create --position 75 --color green --in <project> --json` |
@@ -193,7 +221,13 @@ basecamp <cmd> --page 1     # First page only, no auto-pagination
 
 ## URL Parsing
 
-**Always parse URLs before acting on them:**
+**Parse URLs before acting on them — unless you're handing the URL to a command
+that accepts a URL directly** (`show`, `comments show`, `comments thread`,
+`attachments list`/`attachments download`), which extract the IDs for you. Only `comments show` and
+`comments thread` verify the URL's host and account before any fetch. For other
+URL-accepting commands, only pass URLs from a trusted Basecamp host:
+`basecamp url parse` extracts IDs but does **not** validate the URL's origin, so
+parsing an attacker-controlled path yields trusted-looking IDs.
 
 ```bash
 basecamp url parse "https://3.basecamp.com/2914079/buckets/41746046/messages/9478142982#__recording_9488783598" --json
@@ -216,7 +250,16 @@ Returns: `account_id`, `project_id`, `type`, `recording_id`, `comment_id` (from 
 # Comments are flat - reply to the parent recording_id, not the comment_id
 basecamp url parse "https://...messages/123#__recording_456" --json
 # Returns recording_id: 123 (parent), comment_id: 456 (fragment) - comment on 123, not 456
-basecamp comment 123 "Reply" --in <project>
+basecamp comments create 123 "Reply" --in <project>
+
+# Or get the whole reply-ready context deterministically in one call:
+basecamp comments thread "https://...messages/123#__recording_456" --json
+# .data.reply_target.recording_id  → where to post the reply
+# .data.reply_target.account_id    → the account that reply belongs to (build a fully-qualified command)
+# .data.focus.author.mention.syntax → paste-ready [@Name](mention:SGID)
+# .data.comments                   → surrounding discussion (default window of 41)
+# --all returns every fetched comment; --window N sets the window size
+# When the account came from the URL (none configured), the reply breadcrumb carries --account
 ```
 
 ## Decision Trees
@@ -238,6 +281,7 @@ Need to find something?
 │   Note: Defaults to active status; use --status archived for archived items
 │   ⚠ No assignee data — cannot filter by person; use reports assigned instead
 ├── Full-text search? → basecamp search "query" --json
+├── Have a comment URL, or a notification link targeting a comment? → basecamp comments thread <url> --json
 └── Have a URL? → basecamp url parse "<url>" --json
 ```
 
@@ -248,7 +292,12 @@ Want to change something?
 ├── Have URL? → basecamp url parse "<url>" → use extracted IDs
 ├── Have ID? → basecamp <resource> update <id> --field value
 ├── Change status? → basecamp recordings trash|archive|restore <id>
-└── Complete todo? → basecamp done <id>
+├── Complete todo? → basecamp todos complete <id>
+├── Complete card? → basecamp cards done <id|url> --in <project>
+└── Reply to a comment? → basecamp comments show <url> --jq '.data | {reply_target, mention}'
+    (one call, cheap atoms — the mention is machine-only, so use --jq/--json, not plain show)
+    or basecamp comments thread <url> when you need the surrounding discussion;
+    then basecamp comments create <reply_target.recording_id> <text>
 ```
 
 ## Common Workflows
@@ -259,20 +308,20 @@ Want to change something?
 # Get commit info and comment on todo (use printf %q for safe quoting)
 COMMIT=$(git rev-parse --short HEAD)
 MSG=$(git log -1 --format=%s)
-basecamp comment <todo_id> "Commit $COMMIT: $(printf '%s' "$MSG")" --in <project>
+basecamp comments create <todo_id> "Commit $COMMIT: $(printf '%s' "$MSG")" --in <project>
 
 # Complete when done
-basecamp done <todo_id>
+basecamp todos complete <todo_id>
 ```
 
 ### Track PR in Basecamp
 
 ```bash
 # Create todo for PR work
-basecamp todo "Review PR #42" --in <project> --assignee me --due tomorrow
+basecamp todos create "Review PR #42" --in <project> --assignee me --due tomorrow
 
 # When merged
-basecamp done <todo_id>
+basecamp todos complete <todo_id>
 basecamp chat post "Merged PR #42" --in <project>
 ```
 
@@ -294,18 +343,18 @@ basecamp people pingable --jq '.data[] | select(.name == "Jane Smith")'
 # => {"id": 42000, "attachable_sgid": "BAh7CEkiCG...", "name": "Jane Smith"}
 
 # 2. Use SGID in Markdown mention syntax (zero API calls during post)
-basecamp comment 123 "Hey [@Jane Smith](mention:BAh7CEkiCG...), check this" --in <project>
+basecamp comments create 123 "Hey [@Jane Smith](mention:BAh7CEkiCG...), check this" --in <project>
 
 # Or use person ID (one lookup during post)
-basecamp comment 123 "Hey [@Jane Smith](person:42000), check this" --in <project>
+basecamp comments create 123 "Hey [@Jane Smith](person:42000), check this" --in <project>
 ```
 
 ### Mentioning people (interactive — may be ambiguous)
 
 ```bash
 # Fuzzy matching: use @First.Last to reduce ambiguity
-basecamp comment <id> "@Jane.Smith, please review this" --in <project>
-basecamp message "Update" "cc @Jane, @Alex" --in <project>
+basecamp comments create <id> "@Jane.Smith, please review this" --in <project>
+basecamp messages create "Update" "cc @Jane, @Alex" --in <project>
 basecamp chat post "@Jane, done!" --in <project>
 
 # Ambiguous names return an error with suggestions
@@ -317,6 +366,9 @@ basecamp chat post "@Jane, done!" --in <project>
 ```bash
 # List columns to get IDs
 basecamp cards columns --in <project> --json
+
+# Complete a card (moves it to the Done column automatically)
+basecamp cards done <card_id> --in <project>
 
 # Move card to column
 basecamp cards move <card_id> --to <column_id> --in <project>
@@ -404,7 +456,20 @@ basecamp projects list --json               # List all
 basecamp projects show <id> --json          # Show details
 basecamp projects create "Name" --json      # Create
 basecamp projects update <id> --name "New"  # Update
+basecamp projects trash <id>                # Move to trash (recoverable)
 ```
+
+**Archiving a project:** the CLI does not have a dedicated archive command, but the
+underlying status endpoint can be hit via raw API. Same path works for restoring
+to active or moving to trashed.
+
+```bash
+basecamp api put "projects/<id>/status/archived" -d '{}' --json   # Archive
+basecamp api put "projects/<id>/status/active" -d '{}' --json     # Unarchive
+basecamp api put "projects/<id>/status/trashed" -d '{}' --json    # Trash (same as `projects trash`)
+```
+
+Verify with `basecamp projects show <id> --jq '.data.status'`.
 
 ### Todos
 
@@ -414,9 +479,9 @@ basecamp todos list --assignee me --in <project>        # My todos
 basecamp todos list --overdue --in <project>            # Overdue only
 basecamp todos list --status completed --in <project>   # Completed
 basecamp todos list --list <todolist_id> --in <project> # In specific list
-basecamp todo "Task" --in <project> --list <list> --assignee me --due tomorrow
-basecamp done <id> [id...]                              # Complete (multiple OK)
-basecamp reopen <id>                                    # Uncomplete
+basecamp todos create "Task" --in <project> --list <list> --assignee me --due tomorrow
+basecamp todos complete <id> [id...]                    # Complete (multiple OK)
+basecamp todos uncomplete <id>                          # Reopen
 basecamp assign <id> [id...] --to <person> --in <project>       # Assign to-do (multiple OK)
 basecamp unassign <id> [id...] --from <person> --in <project>   # Remove to-do assignee (multiple OK)
 basecamp assign <id> [id...] --card --to <person> --in <project>   # Assign card
@@ -426,9 +491,91 @@ basecamp unassign <id> [id...] --step --from <person> --in <project> # Remove st
 basecamp todos position <id> --to 1                     # Move to top
 basecamp todos position <id> --to 1 --list <id|name|url> # Move to different list
 basecamp todos sweep --overdue --complete --comment "Done" --in <project>
+basecamp todos create "Task" --in <project> --list <list> --notify-on-completion "Jane,Bob"  # Notify when done
+basecamp todos update <id> --notify-on-completion "Jane"  # Set who's notified on completion
+basecamp todos update <id> --no-notify-on-completion      # Clear completion notifications
 ```
 
-**Flags:** `--assignee` (todos only - not available on cards/messages), `--status` (completed/incomplete), `--overdue`, `--list`, `--due`, `--limit`, `--all`
+**Flags:** `--assignee` (todos only - not available on cards/messages), `--status` (completed/incomplete/archived/trashed), `--overdue`, `--list`, `--due`, `--limit`, `--all`
+
+**Completion subscribers** ("When done, notify…"): set with
+`--notify-on-completion <names or IDs, comma-separated>` on `todos create` and
+`todos update`; clear with `--no-notify-on-completion` on `todos update`.
+Plain updates (title, due date, etc.) preserve existing completion subscribers.
+
+**Todo Subtasks (checklist steps):** Basecamp to-do subtasks are stored as
+`Kanban::Step` records, even when their parent is a normal `Todo`. The regular
+`basecamp todos show` response may not include them; use
+`basecamp recordings list --in <project> --type Kanban::Step` and filter by
+`parent.id` to list/check subtasks for a todo.
+
+```bash
+# Create a subtask under a todo.
+# Use the numeric project ID and todo ID in this card-style path.
+basecamp api post /buckets/<project_id>/card_tables/cards/<parent_todo_id>/steps.json \
+  --data '{"title":"Subtask title"}' \
+  --json
+
+# Read or edit a subtask
+basecamp api get /buckets/<project_id>/card_tables/steps/<step_id>.json --json
+basecamp api put /buckets/<project_id>/card_tables/steps/<step_id>.json \
+  --data '{"title":"Updated subtask title"}' \
+  --json
+
+# List subtasks for a todo
+PARENT_TODO_ID=<parent_todo_id> \
+basecamp recordings list --in <project> --type Kanban::Step --all \
+  --jq '.data[] | select(.parent.id==(env.PARENT_TODO_ID | tonumber)) | {id,title,status,parent:.parent.id,url}'
+
+# Assign or set a due date.
+# Include the current title and every person who should remain assigned.
+basecamp api put /buckets/<project_id>/card_tables/steps/<step_id>.json \
+  --data '{"title":"Current subtask title","assignee_ids":[<person_id>,<existing_person_id>],"due_on":"<YYYY-MM-DD>"}' \
+  --json
+
+# Complete or reopen a subtask
+basecamp api put /buckets/<project_id>/card_tables/steps/<step_id>/completions.json \
+  --data '{"completion":"on"}' \
+  --json
+basecamp api put /buckets/<project_id>/card_tables/steps/<step_id>/completions.json \
+  --data '{"completion":"off"}' \
+  --json
+
+# Trash a subtask from the todo UI by trashing the step record (Kanban::Step)
+basecamp recordings trash <step_id> --in <project> --json
+```
+
+Key points: replace numeric placeholders such as `<project_id>`,
+`<parent_todo_id>`, and `<person_id>` before running the examples. Bucket-scoped
+API paths require a numeric project/bucket ID; `--in <project>` can still accept
+a project name where CLI commands support name resolution. For creating todo
+subtasks, Basecamp accepts the parent todo ID in the
+`/buckets/<project_id>/card_tables/cards/<parent_todo_id>/steps.json` path. To
+list subtasks under a todo, use
+`basecamp recordings list --in <project> --type Kanban::Step` with the
+`parent.id` filter shown above.
+
+Completed subtasks have `completed: true` and a `completion` object with
+`created_at` and `creator`. Open subtasks have `completed: false` and no
+`completion` object. Trashed subtasks may still be readable directly with
+`status: "trashed"` and `inherits_status: false`, but they no longer appear in
+the todo UI.
+
+In testing with todo-backed steps, these bucket-scoped direct `GET` requests
+returned `not_found`:
+`/buckets/<project_id>/card_tables/cards/<parent_todo_id>/steps.json`,
+`/buckets/<project_id>/card_tables/cards/<parent_todo_id>.json`, and
+`/buckets/<project_id>/todos/<parent_todo_id>/steps.json`. To inspect trashed
+subtasks, add `--status trashed`; archived parents may require
+`--status archived`.
+
+When updating a todo subtask with the raw API, include the existing `title` along
+with metadata changes; omitting it may reset the step title to `Untitled`.
+`assignee_ids` sets the full assignee list for the step, so include every person
+who should remain assigned. The generic
+`basecamp assign <step_id> --step ...` command is intended for card steps and
+may fail with `Bad Request` for todo-backed steps, so prefer `assignee_ids` on
+the raw step update endpoint for todo subtasks.
 
 ### Todolists
 
@@ -439,8 +586,14 @@ basecamp todolists list --in <project> --json              # List todolists
 basecamp todolists show <id> --in <project>                # Show details
 basecamp todolists create "Name" --in <project> --json     # Create
 basecamp todolists create "Name" --description "Desc" --in <project>
+basecamp todolists create "Name" --visible-to-clients --in <project>  # Visible to clients
 basecamp todolists update <id> --name "New" --in <project> # Update
+basecamp todolists position <id> --to 1                     # Reorder one list (1 = top)
+basecamp todolists position <id> <id> <id>                  # Order incomplete lists, top→bottom
 ```
+
+Bulk `position` sets the visible order in one command: pass incomplete lists from
+the same todoset, top to bottom. It always places them at the top.
 
 ### Cards (Kanban)
 
@@ -452,14 +605,35 @@ basecamp cards list --card-table <id> --in <project>  # Specific table (required
 basecamp cards list --column <id> --in <project>      # Cards in column
 basecamp cards columns --in <project> --json          # List columns (needs --card-table if multiple)
 basecamp cards show <id> --in <project>               # Card details
-basecamp card "Title" "<p>Body</p>" --in <project> --column <id>
+basecamp cards create "Title" "<p>Body</p>" --in <project> --column <id>
 basecamp cards update <id> --title "New" --due tomorrow --assignee me
+basecamp cards done <id|url> --in <project>           # Move to the Done column automatically
 basecamp cards move <id> --to <column_id>             # Move to column (numeric ID)
 basecamp cards move <id> --to "Done" --card-table <table_id>  # Move by name (needs table)
 basecamp cards move <id> --to "Done" --position 1 --card-table <table_id>  # Move to position
 basecamp cards move <id> --on-hold                    # Move to on-hold of current column
 basecamp cards move <id> --to <column_id> --on-hold   # Move to on-hold of target column
 ```
+
+**Cross-project card move (wormholes):** the only way to move a card to another
+project is to teleport it through a *wormhole* — a portal on the card table that
+sends cards to a preconfigured column on another project's card table (max 4 per
+table). The teleport is **asynchronous and mints a new card id**: after the move
+is accepted, the server copies the card into the destination and deletes the
+original, so the **original id 404s** — do not reuse it.
+
+```bash
+basecamp cards wormholes list --in <project>          # Discover wormholes (id, destination, linked)
+basecamp cards wormholes create --to-column <id|url> --in <project>   # Link to a column on another table (≤4)
+basecamp cards wormholes update <id> --to-column <id|url> --in <project>
+basecamp cards wormholes delete <id> --in <project>
+basecamp cards move <card_id> --to-wormhole <wormhole_id> --in <project>          # Teleport (async)
+basecamp cards move <card_id> --to-wormhole <destination_column_url> --in <project>  # Match by destination column
+```
+
+`--to-wormhole` is mutually exclusive with `--to`/`--on-hold`/`--position`. Pass
+a numeric wormhole id to route directly, or a destination-column URL to match it
+against the source table's wormholes.
 
 **Archived/trashed cards:** `cards list` only returns active cards. For archived or trashed cards, use `basecamp recordings cards --status archived --in <project>` or `--status trashed`.
 
@@ -491,8 +665,8 @@ basecamp cards column watch <id>                  # Subscribe to column
 ```bash
 basecamp messages list --in <project> --json  # List messages
 basecamp messages show <id> --in <project>    # Show message
-basecamp message "Title" "Body" --in <project>
-basecamp message "Draft" "WIP" --draft --in <project>  # Create draft
+basecamp messages create "Title" "Body" --in <project>
+basecamp messages create "Draft" "WIP" --draft --in <project>  # Create draft
 basecamp messages publish <id>               # Publish a draft
 basecamp messages update <id> --title "New" --body "Updated"
 basecamp messages pin <id> --in <project>     # Pin to top
@@ -501,39 +675,87 @@ basecamp messages unpin <id>                  # Unpin
 
 **Archived/trashed messages:** `messages list` only returns active messages. For archived or trashed messages, use `basecamp recordings messages --status archived --in <project>` or `--status trashed`.
 
-**Flags:** `--draft` (create as draft), `--no-subscribe` (silent, no notifications), `--subscribe "people"` (comma-separated names, emails, IDs, or "me"; mutually exclusive with `--no-subscribe`), `--message-board <id>` (if multiple boards)
+**Flags:** `--draft` (create as draft), `--no-subscribe` (silent, no notifications), `--subscribe "people"` (comma-separated names, emails, IDs, or "me"; mutually exclusive with `--no-subscribe`), `--message-board <id>` (if multiple boards), `--visible-to-clients` (make visible to clients on the project; omit for the server default)
 
 ```bash
-basecamp message "Bot update" "Done" --no-subscribe --in <project>
-basecamp message "FYI" "Note" --subscribe "Alice,bob@x.com" --in <project>
+basecamp messages create "Bot update" "Done" --no-subscribe --in <project>
+basecamp messages create "FYI" "Note" --subscribe "Alice,bob@x.com" --in <project>
+basecamp messages create "For the client" "..." --visible-to-clients --in <project>
 ```
+
+**Client visibility at create time:** `messages create`, `todolists create`,
+`schedule create`, `checkins question create`, and `tools create` accept
+`--visible-to-clients` to post a client-visible recording in one call (for
+`tools create`, only chat and kanban_board tool types honor it — other types
+inherit the project default). Omitting the flag uses the
+server default, which is context-dependent: **team-only when you post as a team
+member**, but a **client-authenticated caller always creates client-visible
+records** (an explicit `--visible-to-clients=false` is overridden server-side for
+client callers). Passing `--visible-to-clients` posts client-visible in every
+case. To change visibility on an already-created recording, use
+`recordings visibility <id> --visible`.
 
 ### Comments
 
 ```bash
 basecamp comments list <recording_id> --in <project> --json
-basecamp comment <recording_id> "Text" --in <project>
-basecamp comment <recording_id> "@Jane.Smith, looks good!" --in <project>  # With @mention
+basecamp comments show <comment-id|comment-url> --json            # Now returns reply_target + paste-ready mention (JSON)
+basecamp comments thread <comment-id|comment-url> --json          # Reply-ready: parent + focus + discussion + @mention
+basecamp comments thread <comment-id> --all --json                # Every fetched comment instead of a window
+basecamp comments thread <comment-id> --window 11 --json          # Focus-centered window of 11
+basecamp comments create <recording_id> "Text" --in <project>
+basecamp comments create <recording_id> "@Jane.Smith, looks good!" --in <project>  # With @mention
 basecamp comments update <id> "Updated" --in <project>
 ```
+
+**Cheap atoms vs. deep context (choose by need):**
+- `comments show <url> --jq '.data | {reply_target, mention}'` — one API call. Returns
+  `reply_target` (`recording_id` — where a reply is posted, comments are flat — plus
+  `account_id`) and a paste-ready author `mention` (JSON only; human output shows a reply
+  breadcrumb). Use this for the exact-comment reply atoms.
+- `comments thread <url>` — two extra calls. Adds the full parent recording, the
+  surrounding discussion (windowed, truncation-honest), and focus attachments. Use this
+  when the surrounding discussion matters.
 
 ### Files & Documents
 
 ```bash
 basecamp files list --in <project> --json               # List all (folders, files, docs)
 basecamp files list --vault <folder_id> --in <project>  # List folder contents
+basecamp files list --all-projects --json               # Across every project (first 100)
+basecamp files list --all-projects --limit 500          # Walk pages until 500 collected
+basecamp files list --all-projects --page 2             # Exactly page 2
+basecamp files list --all-projects --all                # Every page (slow on big accounts)
 basecamp files show <id> --in <project>                 # Show item (auto-detects type)
 basecamp files download <id> --in <project>             # Download file
 basecamp files download <id> --out ./dir                # Download to specific dir
 basecamp files download "https://storage.../download/f" # Download from storage URL
 basecamp files uploads create <file> --in <project>      # Upload file to root
 basecamp files uploads create <file> --vault <folder_id> --in <project>  # Upload to folder
+basecamp files uploads create <file> --visible-to-clients --in <project>  # Client-visible (root folder only)
 basecamp files folder create "Folder" --in <project>
 basecamp files doc create "Doc" "Body" --in <project>
 basecamp files doc create "Draft" --draft --in <project>
 basecamp files doc create "Notes" "..." --no-subscribe --in <project>
-basecamp files update <id> --title "New" --content "Updated"
+basecamp files doc create "For client" "..." --visible-to-clients --in <project>  # Client-visible (root folder only)
+basecamp files update <document_id> --title "New" --content "Updated"
+basecamp files update <document_id> --title "New" --in <project>      # Preserves existing document content
+basecamp files update <document_id> --content "Updated" --in <project> # Preserves existing document title
 ```
+
+**Document update semantics:** `basecamp files update <document_id>` is safe for partial updates in the CLI: when you pass only `--title` or only `--content`, the CLI first fetches the current document and preserves the untouched field.
+
+**Client visibility at create time:** `doc create` and `uploads create` accept
+`--visible-to-clients`, but the server only honors it in the project's **root
+Docs & Files folder**. Targeting a nested folder (`--vault`/`--folder`) with the
+flag is a hard error raised before anything is uploaded — a nested item inherits
+its folder's visibility, and that can't be changed per-item afterward (the
+visibility endpoint rejects nested docs/uploads). To make a nested item
+client-visible, create it in the root folder, or change the eligible top-level
+ancestor that controls the folder's visibility first. Omitting the flag uses the
+server default; as with Messages, a **client-authenticated caller always creates
+client-visible records** regardless. `recordings visibility` is **not** a
+remediation for nested docs/uploads.
 
 **Subcommands:** `folders`, `uploads`, `documents` (each with pagination flags)
 
@@ -553,7 +775,7 @@ basecamp schedule update <id> --summary "New title" --starts-at "..."
 basecamp schedule settings --include-due --in <project>  # Include todos/cards due dates
 ```
 
-**Flags:** `--all-day`, `--notify`, `--participants <ids>`, `--no-subscribe`, `--subscribe "people"` (mutually exclusive), `--status` (active/archived/trashed)
+**Flags:** `--all-day`, `--notify`, `--participants <ids>`, `--no-subscribe`, `--subscribe "people"` (mutually exclusive), `--status` (active/archived/trashed), `--visible-to-clients` (make visible to clients; omit for the server default)
 
 ### Check-ins
 
@@ -562,6 +784,8 @@ basecamp checkins --in <project> --json           # Questionnaire info
 basecamp checkins questions --in <project>        # List questions
 basecamp checkins question <id> --in <project>    # Question details
 basecamp checkins answers <question_id> --in <project>  # List answers
+basecamp checkins answers <question_id> --by me --in <project>  # My answers only
+basecamp checkins answers <question_id> --by "Alice Smith" --in <project>  # Filter by person (name, email, or ID)
 basecamp checkins answer <id> --in <project>      # Answer details
 basecamp checkins question create "What did you work on?" --in <project>
 basecamp checkins question update <id> "New question" --frequency every_week
@@ -570,6 +794,8 @@ basecamp checkins answer update <id> "Updated" --in <project>
 ```
 
 **Schedule options:** `--frequency` (every_day, every_week, every_other_week, every_month, on_certain_days), `--days 1,2,3,4,5` (0=Sun), `--time "5:00pm"`
+
+**Client visibility:** `checkins question create` accepts `--visible-to-clients` to make the question visible to clients (omit for the server default; see the note under Messages for the context-dependent rule).
 
 ### Timeline
 
@@ -702,9 +928,16 @@ basecamp notifications --json                         # List (page 1)
 basecamp notifications list --page 2 --json           # Page 2
 basecamp notifications read <id> --json               # Mark as read
 basecamp notifications read <id> <id> --page 2 --json # Mark from page 2
+basecamp notifications bubbleups --json               # All bubble-ups (BC5)
+basecamp notifications list --limit-bubble-ups --json # Cap inline bubble-ups at 2
 ```
 
 **Note:** `read` resolves notification IDs from the specified page. Use `--page` to match the page you listed.
+
+**Bubble Ups (BC5):** `bubbleups` lists all current and scheduled bubble-ups
+(paginated; `--page` fetches a single page). `list --limit-bubble-ups` keeps the
+notification feed compact: at most 2 inline bubble-ups, scheduled ones omitted,
+with the uncapped counts still reported.
 
 ### Accounts
 
@@ -725,8 +958,41 @@ basecamp chat messages --in <project> --json  # List messages
 basecamp chat post "Hello!" --in <project>
 basecamp chat post "@Jane.Smith, check this" --in <project>  # With @mention (auto text/html)
 basecamp chat line <line_id> --in <project>   # Show line
+basecamp chat update <line_id> "edited content" --in <project>  # Edit existing message in place
 basecamp chat delete <line_id> --in <project> --force # Delete line (permanent, not trashable)
 ```
+
+### Pings (Direct Messages)
+
+Pings are Basecamp's 1-on-1 and small-group direct messages. They are stored as chat transcripts in `Circle` buckets and use the same line API shape as Campfires.
+
+Use `notifications` to discover active ping threads, then use the generic `api` command to read or post lines.
+
+```bash
+# Find ping threads visible in notifications.
+# circle_id is the Circle bucket ID from the UI URL; chat_id identifies the Chat::Transcript.
+basecamp notifications --json \
+  --jq '.data.reads[]? | select(.section == "pings") | {bucket_name, app_url, circle_id: (.subscription_url | capture("/buckets/(?<id>[0-9]+)/").id), chat_id: (.subscription_url | capture("/recordings/(?<id>[0-9]+)/").id)}'
+
+# Read a ping thread. Lines are returned newest first.
+basecamp api get "/buckets/<circle_id>/chats/<chat_id>/lines.json" --agent
+
+# Post a ping line.
+basecamp api post "/buckets/<circle_id>/chats/<chat_id>/lines.json" \
+  --data '{"content":"<p>Hey, quick question.</p>"}' --json
+```
+
+Ping line records include `creator.name`, `created_at`, `content` HTML, `type`, `bucket.type: "Circle"`, and attachment fields when files or voice notes are present.
+
+Ping URLs use `/circles/<circle_id>` and may include a line anchor after `@`:
+
+```bash
+echo "https://app.basecamp.com/<account_id>/circles/44024535@9927050443" \
+  | sed -E 's|.*/circles/([0-9]+)(@([0-9]+))?.*|circle:\1 line:\3|'
+# circle:44024535 line:9927050443
+```
+
+Pings are not returned by `basecamp recordings <type>`. Use `notifications` for discovery and the chat lines API for the conversation.
 
 ### People
 
@@ -742,16 +1008,32 @@ basecamp people remove <id> --project <project>    # Remove from project
 ### Search
 
 ```bash
-basecamp search "query" --json                    # Full-text search
-basecamp search "query" --sort updated_at --limit 20
-basecamp search metadata --json                   # Available search scopes
+basecamp search "query" --json                    # Full-text search (capped at 20; --all for every match)
+basecamp search "query" --sort recency --limit 20
+basecamp search "query" --project Marketing       # Scope to one project (--in also works)
+basecamp search "query" --type todo               # Filter by type: todo, message, document, comment,
+                                                  #   card, file, ping, chat, check-in, event, folder,
+                                                  #   forward, client
+basecamp search "query" --creator me              # Filter by creator (name, email, ID, or 'me')
+basecamp search "query" --since last_30_days      # last_7_days|last_30_days|last_90_days|last_12_months|forever
+basecamp search "query" --file-type pdf           # Filter attachments: image, audio, video, pdf
+basecamp search "query" --exclude-chat            # Drop chat/campfire results
+basecamp search metadata --json                   # Recording and file types the API accepts as filters
 ```
 
 ### Generic Show
 
 ```bash
-basecamp show <type> <id> --in <project> --json   # Show any recording type
+basecamp show <type> <id> --in <project> --json                   # Show any recording type (includes up to 100 comments by default)
+basecamp show <type> <id> --all-comments --in <project> --json   # Fetch the full discussion when you need every comment
+basecamp show <type> <id> --no-comments --in <project> --json    # Skip the extra comments fetch
 # Types: todo, todolist, message, comment, card, card-table, document (or omit <type> for generic lookup)
+
+# Typed show commands also support --comments / --all-comments / --no-comments:
+basecamp todos show <id> --comments --json                        # Opt in to comments on typed show
+basecamp cards show <id> --all-comments --json                    # Fetch all comments on card
+basecamp messages show <id> --no-comments --json                  # Suppress comments
+# All commentable show commands: todos, messages, cards, files, todolists, schedule, checkins, forwards, chat
 ```
 
 ## Configuration
@@ -761,7 +1043,7 @@ The CLI uses two directory namespaces: `basecamp` for your Basecamp identity and
 ```
 ~/.config/basecamp/           # Basecamp identity (DO NOT read credentials)
 ├── credentials.json          #   OAuth tokens — NEVER read or log
-├── client.json               #   DCR client registration
+├── client.json               #   Obsolete (former dev-only client registration; safe to delete)
 └── config.json               #   Global preferences (account_id, base_url, format)
 
 ~/.cache/basecamp/            # Tool cache (ephemeral, auto-managed)
@@ -813,14 +1095,24 @@ cat .basecamp/config.json 2>/dev/null || echo "No project configured"
 basecamp doctor --json                            # Check CLI health, auth, connectivity
 ```
 
+**Coding agent setup (non-interactive):**
+```bash
+basecamp setup agents                             # Install skill + connect detected agent(s)
+basecamp setup agents --json                      # Structured result envelope
+```
+`setup agents` installs the baseline skill and connects coding agents without
+prompting. Selection is driven by `BASECAMP_SETUP_AGENT` (`claude`, `codex`,
+`all`, or `none`); unset auto-detects — one detected agent is connected, several
+leave the skill only and surface the per-agent `basecamp setup <id>` commands.
+
 **Rate limiting (429):** The CLI handles backoff automatically. If you see 429 errors, reduce request frequency.
 
 **Authentication errors:**
 ```bash
 basecamp auth status                              # Check auth
 basecamp auth login                               # Re-authenticate
-basecamp auth login --scope full                  # Full access (BC3 OAuth only)
-basecamp auth login --device-code                 # Headless: display URL, paste callback
+basecamp auth login --scope full                  # Full access (ignored by Launchpad)
+basecamp auth login --device-code                 # Headless authentication with manual browser instructions
 ```
 
 **Network errors / localhost URLs:**
@@ -838,11 +1130,11 @@ cat ~/.config/basecamp/accounts.json              # Check available accounts
 ```
 
 **Required arguments are positional (not flags):**
-- `basecamp todo "Buy milk"` (not `--content`)
-- `basecamp card "New feature"` (not `--title`)
-- `basecamp message "Subject" "Body"` (not `--subject`)
+- `basecamp todos create "Buy milk"` (not `--content`)
+- `basecamp cards create "New feature"` (not `--title`)
+- `basecamp messages create "Subject" "Body"` (not `--subject`)
 - `basecamp chat post "Hello"` (not `--content`)
-- `basecamp comment <id> "Text"` (not a flag)
+- `basecamp comments create <id> "Text"` (not a flag)
 - `basecamp webhooks create "https://..." --in <project>` (not `--url`)
 - `basecamp checkins answer create <question-id> "content"` (not `--question`)
 - `--date YYYY-MM-DD` is optional for `checkins answer create`; if omitted, it defaults to today
@@ -852,9 +1144,9 @@ When a required positional argument is missing, the CLI returns a structured err
 the specific argument. Use this for elicitation:
 
 ```bash
-$ basecamp todo --json
+$ basecamp todos create --json
 {"ok": false, "error": "<content> required", "code": "usage",
- "hint": "Usage: basecamp todo <content>"}
+ "hint": "Usage: basecamp todos create <content>"}
 
 $ basecamp comments create 123 --json
 {"ok": false, "error": "<content> required", "code": "usage", ...}
