@@ -3,7 +3,8 @@ name: basecamp
 description: |
   Interact with Basecamp via the Basecamp CLI. Full API coverage: projects, todos, cards,
   messages, files, schedule, check-ins, timeline, recordings, templates, webhooks,
-  subscriptions, lineup, chat, pings, gauges, assignments, notifications, and accounts.
+  subscriptions, lineup, chat, pings, gauges, assignments, notifications, bookmarks,
+  drafts, notes, calendars, and accounts.
   Use for ANY Basecamp question or action.
 triggers:
   # Direct invocations
@@ -18,6 +19,10 @@ triggers:
   - basecamp messages
   - basecamp file
   - basecamp document
+  - basecamp bookmarks
+  - basecamp drafts
+  - basecamp notes
+  - basecamp calendars
   - basecamp schedule
   - basecamp checkin
   - basecamp check-in
@@ -141,7 +146,7 @@ basecamp todos --agent --help
  "inherited_flags":[{"name":"json","shorthand":"j","type":"bool","default":"false","usage":"..."}]}
 ```
 
-Walk the tree: start at `basecamp --agent --help` for top-level commands, then drill into any subcommand. Commands include `notes` with domain-specific agent hints (e.g., "Cards do NOT support --assignee filtering").
+Walk the tree: start at `basecamp --agent --help` for top-level commands, then drill into any subcommand. Commands carry domain-specific agent hints (e.g., "`--assignee` filters the account-wide listing only; within a project, fetch all and filter client-side").
 
 ### Pagination
 
@@ -156,7 +161,8 @@ basecamp <cmd> --page 1     # First page only, no auto-pagination
 ### Smart Defaults
 
 - `--assignee me` resolves to current user
-- `--due tomorrow` / `--due +3` / `--due "next week"` - natural date parsing
+- `--due tomorrow` / `--due +3` / `--due "next week"` — natural date parsing, **when setting a due date** (`todos create`, `todos update`, `cards create`, and so on)
+- `--due` on a **listing** is a different flag and does not take dates: it accepts only `with`, `without`, or `overdue`, and only account-wide. `basecamp todos list --due tomorrow` is rejected. For date-based listing use `--overdue`, `--no-due-date`, or `basecamp assignments due <scope>`
 - Project from `.basecamp/config.json` if `--in` not specified
 - Multiple identities use named profiles: `basecamp profile create <name>`, then select one with global `--profile <name>` or `BASECAMP_PROFILE=<name>`.
 
@@ -176,6 +182,20 @@ basecamp <cmd> --page 1     # First page only, no auto-pagination
 | Overdue todos (in project) | `basecamp todos list --overdue --in <project> --json` |
 | Overdue todos (cross-project) | `basecamp todos list --all-projects --overdue --json` (flat, oldest first) or `basecamp reports overdue --json` (bucketed by lateness) |
 | All cards (cross-project) | `basecamp cards list --all-projects --json` (grouped by project) |
+| Someone's todos (cross-project) | `basecamp todos list --all-projects --assignee "Ann" --json` (server-side filter) |
+| Two people's todos (cross-project) | `basecamp todos list --all-projects --assignee ann --assignee bob --json` (matches either) |
+| Someone's cards (cross-project) | `basecamp cards list --all-projects --assignee "Ann" --json` |
+| Todos with no due date set (cross-project) | `basecamp todos list --all-projects --due without --json` |
+| My bookmarks | `basecamp bookmarks list --json` |
+| Bookmark something | `basecamp bookmarks add <id-or-url> --json` |
+| Is it bookmarked? | `basecamp bookmarks check <id-or-url> --json` (always exits 0) |
+| My unpublished drafts | `basecamp drafts list --json` |
+| Read my personal note | `basecamp notes show --json` |
+| Replace my personal note | `basecamp notes set "<content>" --json` |
+| Check-ins I owe answers to | `basecamp checkins reminders --json` |
+| Add to Up Next | `basecamp assignments prioritize <id> --json` |
+| Recolor a calendar | `basecamp calendars update <id-or-url> --color blue --json` |
+| Todo outside any list | `basecamp todos create "<content>" --loose --in <project> --json` |
 | Assign todo | `basecamp assign <id> [id...] --to <person> --in <project> --json` |
 | Assign card | `basecamp assign <id> [id...] --card --to <person> --in <project> --json` |
 | Assign card step | `basecamp assign <id> [id...] --step --to <person> --in <project> --json` |
@@ -201,6 +221,7 @@ basecamp <cmd> --page 1     # First page only, no auto-pagination
 | Download attachments | `basecamp attachments download <id> --out /tmp/` |
 | Show + download | `basecamp todos show <id> --download-attachments --json` |
 | Stream attachment to stdout | `basecamp attachments download <id> --file <name> --out -` |
+| Change history for an item | `basecamp events <id\|url> --json` (when a card moved columns, when a todo was completed) |
 | Search | `basecamp search "query" --json` |
 | Parse URL | `basecamp url parse "<url>" --json` |
 | Upload file | `basecamp files uploads create <file> [--vault <folder_id>] --in <project> --json` |
@@ -496,7 +517,7 @@ basecamp todos update <id> --notify-on-completion "Jane"  # Set who's notified o
 basecamp todos update <id> --no-notify-on-completion      # Clear completion notifications
 ```
 
-**Flags:** `--assignee` (todos only - not available on cards/messages), `--status` (completed/incomplete/archived/trashed), `--overdue`, `--list`, `--due`, `--limit`, `--all`
+**Flags:** `--assignee` (repeatable; server-side account-wide, client-side within a project; also on `cards list` account-wide, but not on messages), `--status` (completed/incomplete/archived/trashed), `--overdue`, `--list`, `--due` (**listing filter: `with`/`without`/`overdue` only, account-wide only** — not a date; see Smart Defaults), `--limit`, `--all`
 
 **Completion subscribers** ("When done, notify…"): set with
 `--notify-on-completion <names or IDs, comma-separated>` on `todos create` and
@@ -527,10 +548,10 @@ PARENT_TODO_ID=<parent_todo_id> \
 basecamp recordings list --in <project> --type Kanban::Step --all \
   --jq '.data[] | select(.parent.id==(env.PARENT_TODO_ID | tonumber)) | {id,title,status,parent:.parent.id,url}'
 
-# Assign or set a due date.
-# Include the current title and every person who should remain assigned.
+# Assign or set a due date. Send only what you're changing — omitted fields are
+# left alone. `assignee_ids` replaces the whole list, so name everyone who stays.
 basecamp api put /buckets/<project_id>/card_tables/steps/<step_id>.json \
-  --data '{"title":"Current subtask title","assignee_ids":[<person_id>,<existing_person_id>],"due_on":"<YYYY-MM-DD>"}' \
+  --data '{"assignee_ids":[<person_id>,<existing_person_id>],"due_on":"<YYYY-MM-DD>"}' \
   --json
 
 # Complete or reopen a subtask
@@ -569,10 +590,20 @@ returned `not_found`:
 subtasks, add `--status trashed`; archived parents may require
 `--status archived`.
 
-When updating a todo subtask with the raw API, include the existing `title` along
-with metadata changes; omitting it may reset the step title to `Untitled`.
-`assignee_ids` sets the full assignee list for the step, so include every person
-who should remain assigned. The generic
+**Raw step updates are partial.** `PUT .../card_tables/steps/<id>.json` leaves
+every parameter you omit unchanged, so send only the fields you are changing.
+Echoing back a `title` you did not mean to change is not merely redundant — it
+reverts anyone who edited the title between your read and your write. To clear a
+value, say so explicitly: `"due_on": null` clears the due date, `"assignee_ids":
+[]` removes everyone. `assignee_ids` always replaces the whole list rather than
+adding to it, so name every person who should remain assigned.
+
+(This is bc3#12521. Before it, an omitted field *was* cleared and a title-less
+update was rejected, which is why older guidance said to resend the title. Todo
+subtasks and card steps share one endpoint and one contract — `PUT
+card_tables/steps/:id` routes to the same controller for both.)
+
+The generic
 `basecamp assign <step_id> --step ...` command is intended for card steps and
 may fail with `Bad Request` for todo-backed steps, so prefer `assignee_ids` on
 the raw step update endpoint for todo subtasks.
@@ -597,7 +628,7 @@ the same todoset, top to bottom. It always places them at the top.
 
 ### Cards (Kanban)
 
-**Note:** Cards do NOT support `--assignee` filtering like todos. Fetch all cards and filter client-side if needed. If a project has multiple card tables, you must specify `--card-table <id>`. When you get an "Ambiguous card table" error, the hint shows available table IDs and names.
+**Note:** `--assignee` on `cards list` is **account-wide only** — pass `--all-projects` (or have no project in scope) and it becomes a real server-side filter. Within a single project cards have no assignee filter: fetch all and filter client-side. `--due with|without|overdue` is account-wide only on cards too. If a project has multiple card tables, you must specify `--card-table <id>`. When you get an "Ambiguous card table" error, the hint shows available table IDs and names.
 
 ```bash
 basecamp cards list --in <project> --json             # All cards
@@ -639,7 +670,11 @@ against the source table's wormholes.
 
 **Identifying completed cards:** Cards in Done columns have `parent.type: "Kanban::DoneColumn"` and `completed: true`. Use this to identify completed cards that haven't been archived.
 
-**Limitation:** Basecamp does not track when cards are moved between columns. The `updated_at` field updates on any modification and cannot reliably indicate when a card was completed.
+**When a card moved columns:** don't read `updated_at` — it changes on any
+modification. Use the event history instead: `basecamp events <card_id> --json`
+records an `adopted` event for every column move, and a card crossing into or
+out of a Done column pairs that with `completed`/`uncompleted`. See
+[Events](#events-change-history).
 
 **Card Steps (checklists):**
 ```bash
@@ -797,6 +832,33 @@ basecamp checkins answer update <id> "Updated" --in <project>
 
 **Client visibility:** `checkins question create` accepts `--visible-to-clients` to make the question visible to clients (omit for the server default; see the note under Messages for the context-dependent rule).
 
+**Managing a question:**
+
+```bash
+basecamp checkins question pause <id> --json      # Stop asking it
+basecamp checkins question resume <id> --json     # Start asking it again
+basecamp checkins question answerers <id> --json  # Who answers it
+basecamp checkins question notify <id> --on-answer --json
+basecamp checkins question notify <id> --no-on-answer --json
+basecamp checkins question notify <id> --digest-include-unanswered --json
+```
+
+`notify` changes **your own** settings, and each one is left alone unless you
+name it — so `--on-answer` does not silently reset the digest setting. The
+`--no-...` spellings send an explicit false; passing neither setting is refused
+rather than sent as an empty update.
+
+**Your pending reminders** (account-wide, no `--in`):
+
+```bash
+basecamp checkins reminders --json
+basecamp checkins reminders --limit 10 --json
+```
+
+`reminders` and `answerers` take `--limit` but deliberately **no `--page`**: the
+API does not honor a page number on these, so the flag would accept a value it
+could not act on.
+
 ### Timeline
 
 ```bash
@@ -809,6 +871,27 @@ basecamp timeline --watch --interval 60           # Poll every 60 seconds
 ```
 
 Use `--limit N` to cap results or `--all` to fetch everything (default: 100 events). `--all` and `--page` cannot be combined with `--watch`.
+
+### Events (change history)
+
+`basecamp timeline` reports activity across a project or account. For the audit
+trail of one specific item — todo, card, message, document — use `basecamp
+events`:
+
+```bash
+basecamp events <id|url> --json                   # Change history for one item
+basecamp events <id> --limit 25 --json            # Cap results (default 100)
+basecamp events <id> --all --json                 # Fetch everything
+```
+
+Common `action` values: `created`, `completed`/`uncompleted`,
+`assignment_changed`, `content_changed`, `archived`/`unarchived`,
+`commented_on`, and — for cards — `adopted`, which is recorded every time a card
+moves to another column. That makes `events` the way to answer "when did this
+card move?" or "when was this actually finished?", neither of which `updated_at`
+can tell you.
+
+`--page` accepts only `1`; use `--all` to walk every page.
 
 ### Recordings (Cross-project)
 
@@ -920,6 +1003,89 @@ basecamp assignments due due_later_this_week --json   # Due later this week
 ```
 
 **Scopes:** overdue, due_today, due_tomorrow, due_later_this_week, due_next_week, due_later.
+
+**Cross-project assignee filtering:** `basecamp todos list --all-projects
+--assignee <person>` and `basecamp cards list --all-projects --assignee <person>`
+filter server-side across every project. Both are repeatable and match a task
+assigned to **any** of the named people. Assignees on nested steps are not
+considered, so a card whose step is assigned to someone does not match on that
+basis.
+
+**Always pass `--all-projects` when you mean every project.** Without it these
+listings are account-wide *only* when no project is in scope — and a configured
+default project counts as in scope. With one configured, `--assignee` silently
+degrades to a client-side filter over that single project, and `--due` is
+rejected outright as account-wide-only. `--all-projects` is what overrides a
+configured default, so a recipe that omits it returns different results
+depending on the reader's config.
+
+Within a project `--assignee` still works on todos, but there is no server-side
+filter, so it fetches everything and narrows client-side. Cards have no
+project-scoped `--assignee` at all. `--due with|without|overdue` is account-wide
+only on both, and conflicts with `--overdue` and `--no-due-date`, which select
+their own listings on the same axis. `--assignee` with `--unassigned` is refused
+— the server makes that combination necessarily empty.
+
+**Up Next** — reorder the priority list:
+
+```bash
+basecamp assignments prioritize <id> --json      # Add to Up Next
+basecamp assignments deprioritize <id> --json    # Remove from Up Next
+basecamp assignments reorder <id> --position 1 --json
+```
+
+**Which id to pass — three cases, not two.** A to-do or a card is addressed by
+the entry's own `id`. A step that is *not yet* prioritized is addressed by the
+step's own `id`, found in the parent card's `children`. But once a step *is*
+prioritized, the listing shows it under its parent card, so the entry's top-level
+`id` belongs to the **card**, and only `priority_recording_id` addresses the
+step.
+
+`basecamp assignments list` is the only place `priority_recording_id` appears —
+it is in no URL. Read it from there rather than guessing: `deprioritize` targets
+one exact recording and the server answers 204 either way, so a wrong id reports
+success while changing nothing. If two steps on one card are prioritized, the
+listing shows the card once with a single `priority_recording_id` and the
+siblings are not separately addressable.
+
+### Personal (bookmarks, drafts, notes)
+
+Private to you, spanning every project — no `--in <project>`.
+
+```bash
+basecamp bookmarks list --json
+basecamp bookmarks add <id-or-url> --json
+basecamp bookmarks remove <id-or-url> --json
+basecamp bookmarks check <id-or-url> --json
+basecamp drafts list --json
+basecamp notes show --json
+basecamp notes set "<content>" --json
+```
+
+`bookmarks add` and `remove` are idempotent — re-adding returns the existing
+bookmark, removing an absent one still succeeds. `check` reports
+`{"bookmarked": true|false}` and **always exits 0**: both answers are successes,
+so a nonzero exit here means the request failed, not that the answer was false.
+
+`bookmarks list` and `drafts list` are bounded like the account-wide listings:
+default 100, `--limit N`, `--page N`, `--all` for every page. Drafts are capped
+at 250 server-side.
+
+`notes` is a single private scratchpad — one per person, no id, nothing to list.
+Before your first write it renders empty rather than 404ing. `set` **replaces**
+the whole note (it does not append) and takes content from an argument,
+`--file`, or piped stdin; Markdown is converted to HTML.
+
+### Calendars
+
+```bash
+basecamp calendars show <id-or-url> --json
+basecamp calendars update <id-or-url> --color blue --json
+```
+
+**There is no `calendars list`** — the API has no index endpoint, so address a
+calendar by id or by pasting its URL. Colors: white, red, orange, yellow, green,
+blue, aqua, purple, gray, pink, brown.
 
 ### Notifications
 
@@ -1111,7 +1277,8 @@ leave the skill only and surface the per-agent `basecamp setup <id>` commands.
 ```bash
 basecamp auth status                              # Check auth
 basecamp auth login                               # Re-authenticate
-basecamp auth login --scope full                  # Full access (ignored by Launchpad)
+basecamp auth login --scope full                  # Full access (the default; ignored by Launchpad)
+basecamp auth login --scope read                  # Read-only access (ignored by Launchpad)
 basecamp auth login --device-code                 # Headless authentication with manual browser instructions
 ```
 
