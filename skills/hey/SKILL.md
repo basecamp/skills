@@ -26,6 +26,10 @@ triggers:
   - hey forward
   - hey compose
   - hey draft list
+  - hey draft show
+  - hey draft edit
+  - hey draft send
+  - hey draft delete
   - hey screener
   - screen a sender
   - approve a sender
@@ -39,11 +43,13 @@ triggers:
   - hey seen
   - hey unseen
   - hey move
+  - hey bubble
   - hey trash
   - hey spam
   - hey ignore
   - hey stop-ignoring
   - move email
+  - bubble a thread up
   - trash email
   - mark as spam
   - ignore email thread
@@ -185,7 +191,13 @@ notice on stderr. Both need list data, so they work on `hey box list`, `hey box 
 | Forward email | `hey forward <topic_id> --to alice@example.com -m "For your review"` |
 | Compose email | `hey compose --to alice@example.com --subject "Lunch plans" -m "Are you free Friday?"` |
 | Compose with CC/BCC | `hey compose --to alice@example.com --cc bob@example.com --bcc carol@example.org --subject "Kitchen remodel timeline"` |
-| List drafts | `hey draft list --json` |
+| List drafts | `hey draft list --json` (`--all`/`--page` follow the cursor) |
+| Draft an email for human review | `hey compose --to alice@example.com --subject "Lunch plans" -m "Free Friday?" --draft` |
+| Draft a reply for human review | `hey reply <topic_id> -m "Drafting this." --draft` |
+| Read a draft back | `hey draft show <draft_id> --json` |
+| Change a draft | `hey draft edit <draft_id> --to alice@example.com --subject "New subject"` |
+| Send a draft | `hey draft send <draft_id>` |
+| Trash drafts | `hey draft delete <draft_id>...` |
 | Who is waiting in The Screener | `hey screener list --json` (clearance IDs) |
 | Number waiting | `hey screener list --count` |
 | Let a sender through | `hey screener approve <clearance_id>` |
@@ -207,6 +219,11 @@ notice on stderr. Both need list data, so they work on `hey box list`, `hey box 
 | Mark as seen | `hey seen 12345` |
 | Mark as unseen | `hey unseen 12345` |
 | Move email threads | `hey move 12345 --to feed` |
+| Bubble a thread up now | `hey bubble up 12345 --now` |
+| Bubble a thread up on a date | `hey bubble up 12345 --on 2026-09-04` |
+| Bubble a thread up this weekend | `hey bubble up 12345 --weekend` |
+| List bubbled-up and scheduled threads | `hey bubble list --json` |
+| Cancel a bubble-up | `hey bubble pop 12345` |
 | Move email threads to Trash | `hey trash 12345` |
 | Mark email threads as spam | `hey spam 12345` |
 | Ignore email threads | `hey ignore 12345` |
@@ -280,6 +297,11 @@ Want to send email?
 │   └── With BCC? → add --bcc <email>
 ├── List files in a thread? → hey attachment list <topic_id> --json
 │   └── Save one? → hey attachment save <attachment_id> [--output <path>]
+├── Draft instead of sending (human reviews in HEY)? → add --draft to compose or reply; the answer carries the draft id
+│   ├── Read it back? → hey draft show <draft_id> --json
+│   ├── Change it? → hey draft edit <draft_id> --subject/--to/--cc/--bcc/-m (flags replace; omitted fields are kept)
+│   ├── Deliver it? → hey draft send <draft_id> (recipients required)
+│   └── Discard it? → hey draft delete <draft_id>
 └── Check drafts? → hey draft list --json
 ```
 
@@ -500,7 +522,24 @@ hey move 12345 --to imbox                     # Move one thread
 hey move 12345 67890 --to "paper trail"       # Move multiple threads
 ```
 
-Takes box item IDs (the `id` field from `hey box view --json`). `--to` accepts a box name, kind, or ID. Supported destinations are Imbox, The Feed, Set Aside, Reply Later, and Paper Trail. Bubble Up requires a scheduled date and is not supported by this command.
+Takes box item IDs (the `id` field from `hey box view --json`). `--to` accepts a box name, kind, or ID. Supported destinations are Imbox, The Feed, Set Aside, Reply Later, and Paper Trail. Bubble Up goes through `hey bubble` instead.
+
+### Email - Bubble Up
+
+```bash
+hey bubble up 12345 --now                     # Bubble a thread up to the top of the Imbox
+hey bubble up 12345 67890 --now               # Bubble multiple threads up
+hey bubble up 12345 --on 2026-09-04           # Bubble a thread up on a date
+hey bubble up 12345 --tomorrow                # Bubble a thread up tomorrow morning
+hey bubble up 12345 --weekend                 # Bubble a thread up Saturday morning
+hey bubble up 12345 --next-week               # Bubble a thread up Monday morning
+hey bubble list                               # List bubbled-up and scheduled threads
+hey bubble pop 12345                          # Cancel a thread's bubble-up
+```
+
+Takes box item IDs (the `id` field from `hey box view --json`). `hey bubble up` requires exactly one of `--now`, `--on`, `--tomorrow`, `--weekend`, and `--next-week`. `--on` takes a YYYY-MM-DD date; HEY bubbles the threads up at its morning hour of that day, or at its evening hour (18:00) when the date is today.
+
+`hey bubble list --json` answers two buckets: `bubbled_up`, the threads back in the Imbox after bubbling up, and `scheduled`, the threads waiting in Bubble Up — each scheduled row carries `bubble_up_schedule.bubble_up_at`, and `surprise_me` when HEY picked the time. Use `id` with `hey bubble pop`, `topic_id` with `hey thread read`.
 
 ### Email - Trash and Spam
 
@@ -566,8 +605,31 @@ otherwise — and both take over stdout.
 ### Drafts
 
 ```bash
-hey draft list --json                             # List drafts
+hey compose --subject "Board update" -m "Numbers to follow." --draft   # save instead of sending; answers the draft id
+hey reply <topic_id> -m "Drafting this." --draft  # save a reply draft, addressed like a real reply
+hey draft list --json                             # List drafts; --all and --page follow the next_page cursor
+hey draft show <draft_id> --json                  # The draft's editable state; body is Markdown
+hey draft edit <draft_id> --to alice@example.com  # Each flag replaces its field; omitted flags keep the draft's
+hey draft send <draft_id>                         # Deliver now (through HEY's undo window)
+hey draft delete <draft_id> [<draft_id>...]       # Trash drafts
 ```
+
+This is the review-before-send lane: an agent prepares the email as a draft, a person
+reviews and sends it from any HEY app (or the agent sends it later with `hey draft send`).
+A draft needs no recipients until it is sent; `--draft` on `hey compose` lifts the
+recipient requirement.
+
+**An edit is a revision, not a patch.** The CLI reads the draft first and resends the
+whole of it, so an omitted flag keeps that field. `--to`/`--cc`/`--bcc` replace their
+entire recipient kind; an explicit empty value (`--cc ""`) clears it. Any scheduled
+delivery is preserved through edits.
+
+**Scheduled deliveries.** Scheduling is done in a HEY app for now; the CLI cannot set a
+schedule (HEY's API cannot yet name an exact instant). A draft scheduled in an app stays
+in `hey draft list` until it goes out, `hey draft show` reports `scheduled_delivery_at`
+in UTC like every HEY timestamp, an edit preserves the schedule untouched — refusing the
+rare schedule it could not keep exact rather than moving it — and `hey draft delete`
+cancels it entirely.
 
 ### Calendars
 
