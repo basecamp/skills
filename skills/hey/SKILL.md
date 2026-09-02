@@ -13,6 +13,7 @@ triggers:
   - hey box
   - hey label
   - hey collection
+  - hey set-aside
   - hey workflow
   - hey clip
   - hey snippet
@@ -142,8 +143,8 @@ notice on stderr. Both need list data, so they work on `hey box list`, `hey box 
 `hey label list`, `hey label view`, `hey collection list`, `hey collection view`, `hey workflow list`,
 `hey workflow view`, `hey clip list`, `hey snippet list`, `hey draft list`, `hey search`,
 `hey contact list`, `hey screener list`, `hey screener history`, `hey calendar list`,
-`hey event list`, `hey todo list`, `hey habit list`, `hey timetrack list`, `hey journal list` and
-`hey attachment list`. On `hey box view` they count and list its postings, not the box itself.
+`hey event list`, `hey event day`, `hey event week`, `hey todo list`, `hey habit list`,
+`hey timetrack list`, `hey journal list` and `hey attachment list`. On `hey box view` they count and list its postings, not the box itself.
 
 ## Quick Reference
 
@@ -167,6 +168,13 @@ notice on stderr. Both need list data, so they work on `hey box list`, `hey box 
 | Update a collection | `hey collection update <collection_id> --name "Kitchen renovation"` |
 | Add a thread to a collection | `hey collection add <topic_id> --to <collection_id>` |
 | Remove a thread from a collection | `hey collection remove <topic_id> --from <collection_id>` |
+| List Set Aside threads with their group | `hey set-aside view --all --json` |
+| List Set Aside groups | `hey set-aside group list --json` |
+| List a group's threads | `hey set-aside group view <group_id> --json` |
+| Gather threads into a new group | `hey set-aside group create <id> <id>` |
+| File threads into a group | `hey set-aside group add <id> --to <group_id>` |
+| Take threads out of their group | `hey set-aside group remove <id>` |
+| Break a group up | `hey set-aside group delete <group_id>` |
 | List workflows | `hey workflow list --json` |
 | View workflow stages | `hey workflow view <workflow_id> --json` |
 | List clips | `hey clip list --json` |
@@ -208,6 +216,7 @@ notice on stderr. Both need list data, so they work on `hey box list`, `hey box 
 | Recall a bulk reply | `hey bulk-reply undo <delivery_id>` |
 | List calendars | `hey calendar list --json` |
 | List calendar events | `hey event list --json` |
+| Today's schedule, recurrences expanded | `hey event day --json` |
 | Add a calendar event | `hey event add "Design review" --starts-on 2026-09-02 --start-time 14:00` |
 | List todos | `hey todo list --json` |
 | Add todo | `hey todo add "Draft the quarterly report"` |
@@ -262,6 +271,8 @@ Want to read email?
 ├── Add, create, or remove a label? → hey label add|create|remove
 ├── List collections or collection threads? → hey collection list --json / hey collection view <collection_id> --json
 ├── Create, update, add to, or remove from a collection? → hey collection create|update|add|remove
+├── See Set Aside with its groups? → hey set-aside view --all --json / hey set-aside group list --json
+├── Group, regroup, or ungroup Set Aside threads? → hey set-aside group create|add|remove|delete
 ├── Search threads and messages? → hey search <query> --json
 ├── Need available refinements? → hey search filters --json
 ├── List or view contacts? → hey contact list --json / hey contact show <id> --json
@@ -364,6 +375,20 @@ hey collection remove 987 --from 321                        # Remove a topic ID
 ```
 
 Collection IDs come from `hey collection list`. `hey collection view` returns posting `id`, thread `topic_id`, `next_page`, and `total_count`; pass `--page <next_page>` to continue or `--all` to fetch every page. Collection membership commands take `topic_id`. Creating a collection confirms the mutation, and listing collections provides its ID for later commands.
+
+### Email - Set Aside groups
+
+```bash
+hey set-aside view --all --json                # Set Aside threads, each with box_group_id when grouped
+hey set-aside group list --json                # Groups with thread_count
+hey set-aside group view 42 --all --json       # Threads in one group; pages like a box
+hey set-aside group create 12345 67890         # New group from box item IDs; answers the group id
+hey set-aside group add 12345 --to 42          # File threads into a group (moves them out of another)
+hey set-aside group remove 12345               # Ungroup; threads stay in Set Aside
+hey set-aside group delete 42                  # Dissolve the group; its threads go to Previously Seen
+```
+
+Groups have no name in HEY: a group is its ID and the threads in it. Group commands take posting `id` values (box item IDs), not `topic_id`. HEY's group index answers IDs alone, so `group list` reads each group once for its count; `group view` returns `next_page` and `total_count` and takes `--page` and `--all`. HEY removes a group itself once its last thread leaves, so `group view` or `group delete` on it answers `not_found`. `group create` moves threads into Set Aside if they are in another box. To clear an overflowing Set Aside without losing threads, prefer `group create`/`group add` over `group delete`: deleting a group moves its threads to Previously Seen in the Imbox.
 
 ### Email - Search
 
@@ -653,6 +678,9 @@ the default end.
 ```bash
 hey event list --json                        # Every calendar, from today onward
 hey event list --calendar 123 --starts-on 2026-01-01 --ends-on 2026-01-31 --json
+hey event day --json                         # Today as HEY draws it, recurrences expanded
+hey event day 2026-09-02 --json              # One day
+hey event week 2026-09-02 --json             # The week that day falls in
 hey event add "Design review" --starts-on 2026-09-02 --start-time 14:00 --end-time 15:00
 hey event add "Sarah's birthday" --starts-on 2026-09-02   # No time given, so all day
 hey event add "Standup" --start-time 09:15 --repeat every_weekday --remind 10m
@@ -663,6 +691,12 @@ hey event delete 4821
 Without `--calendar`, `list` reads every calendar and `add` files on the first one that
 accepts events — the personal calendar is in the list HEY serves but refuses them. A
 repeating event lists once as its series, not once per day.
+
+**"What's on my schedule today?" is `hey event day`, not `list`.** A day or a week is the
+span as HEY draws it: a repeating event is expanded into the occurrences inside it, each
+carrying that day's own times and an `occurrence_id`, with its `id` still naming the
+series that `edit` and `delete` take. The period covers the calendars switched on in HEY,
+so `day` and `week` take no `--calendar` — only `--limit` and `--all`.
 
 **Response format:** a flat array of events. Each has `id`, `title`, `starts_at`, `ends_at`,
 `all_day`, `recurring`, `starts_at_time_zone` and `calendar`; one being edited also carries
