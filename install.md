@@ -1,33 +1,23 @@
-I want you to install Agent Skills for Basecamp for me. Execute all steps autonomously.
+I want you to install Agent Skills for 37signals products for me. Execute all steps autonomously.
 
-OBJECTIVE: Install Basecamp agent skills so your agent can manage projects, todos, cards, messages, schedule, campfire, and more via the Basecamp CLI.
+OBJECTIVE: Install the agent skills for the 37signals products you use — Basecamp, HEY, Fizzy, any or all — plus the CLI behind each, so your agent can work in those products.
 
-DONE WHEN: `basecamp --version && basecamp auth status` both succeed and the basecamp skill is installed in your agent.
+DONE WHEN: `(n=0; for cli in basecamp hey fizzy; do command -v "$cli" >/dev/null || continue; n=1; "$cli" auth status --json | grep -q '"authenticated": true' || exit 1; done; [ "$n" = 1 ])` succeeds (at least one product CLI installed, every installed one signed in) and `npx skills list` shows the skills from this repo.
 
 ## TODO
 
-- [ ] Install Basecamp CLI
-- [ ] Authenticate with Basecamp
+- [ ] Install Basecamp CLI (only if you use Basecamp)
+- [ ] Authenticate with Basecamp (only if you use Basecamp)
+- [ ] Install and sign in to HEY CLI (only if you use HEY)
+- [ ] Install and sign in to Fizzy CLI (only if you use Fizzy)
 - [ ] Install skills
 
 ## Step 0: Install Basecamp CLI
 
-Check if the Basecamp CLI is already installed:
+Only if you use Basecamp; otherwise mark this TODO done and continue. The basecamp skills need the Basecamp CLI. Skip the install if `basecamp --version` already succeeds. See the [Basecamp CLI install guide](https://github.com/basecamp/basecamp-cli/blob/main/install.md) for other install methods.
 
 ```bash
-basecamp --version
-```
-
-If `basecamp` is not installed, install it. See the [Basecamp CLI install guide](https://github.com/basecamp/basecamp-cli/blob/main/INSTALL.md) for full options, or use Homebrew:
-
-```bash
-brew install --cask basecamp/tap/basecamp
-```
-
-If `basecamp: command not found` after install, add to PATH:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
+curl -fsSL https://basecamp.com/install-cli | bash
 ```
 
 **Verify:**
@@ -38,49 +28,75 @@ basecamp --version
 
 ## Step 1: Authenticate with Basecamp
 
+Only if you use Basecamp; otherwise mark this TODO done and continue. Skip if `basecamp auth status` already reports authenticated (the installer runs setup on an interactive terminal). Otherwise this opens a browser for OAuth; grant access when prompted. Credentials are stored in the system keychain.
+
 ```bash
 basecamp auth login
 ```
 
-This opens a browser for OAuth. Grant access when prompted. The CLI stores credentials securely in the system keychain.
+**Verify:**
+```bash
+basecamp auth status --json | grep -q '"authenticated": true' && echo OK
+# Expected: OK. The status command exits 0 even when signed out, so test the flag.
+```
+
+## Step 2: Install and sign in to HEY CLI
+
+Only if you use HEY; otherwise mark this TODO done and continue. Skip the install if `hey version` already succeeds. See the [HEY CLI install guide](https://github.com/basecamp/hey-cli/blob/main/docs/install.md) for other install methods. Sign-in opens a browser. The last command installs the hey skill from the CLI itself, since it is temporarily missing from this repo (see the [README](README.md)).
+
+```bash
+curl -fsSL https://hey.com/install-cli | bash && hey auth login && hey skill install
+```
 
 **Verify:**
 ```bash
-basecamp auth status
-# Expected: Authenticated (scope: read)
+hey version && hey auth status --json | grep -q '"authenticated": true' && echo OK
+# Expected: a version line, then OK
 ```
 
-## Step 2: Install skills
+## Step 3: Install and sign in to Fizzy CLI
+
+Only if you use Fizzy; otherwise mark this TODO done and continue. Skip the install if `fizzy --version` already succeeds. See the [Fizzy CLI README](https://github.com/basecamp/fizzy-cli#quick-start) for other install methods. `fizzy setup` asks for a personal access token and an account. The last command installs the fizzy skill from the CLI itself, since it is not published in this repo yet (see the [README](README.md)).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/basecamp/fizzy-cli/master/scripts/install.sh | bash && fizzy setup && fizzy skill install
+```
+
+**Verify:**
+```bash
+fizzy --version && fizzy auth status --json | grep -q '"authenticated": true' && echo OK
+# Expected: fizzy version X.Y.Z, then OK
+```
+
+## Step 4: Install skills
+
+Run this whichever products you use. Installs every skill in this repo into your agent using the [Agent Skills](https://agentskills.io) open standard. The installer auto-detects your agent (Claude Code, Cursor, Codex, VS Code, Gemini CLI, Goose, Amp, OpenCode, and others) and places skills in the right directory. Add `-a claude-code` to target one agent, or `-g` to install globally.
 
 ```bash
 npx skills add basecamp/skills
 ```
 
-This installs skills from this repo into your agent using the [Agent Skills](https://agentskills.io) open standard. The installer auto-detects your agent and places skills in the correct directory. It supports Claude Code, Cursor, Codex, VS Code, Gemini CLI, Goose, Amp, OpenCode, and others.
-
-To install for a specific agent:
-
-```bash
-npx skills add basecamp/skills -a claude-code
-```
-
-To install globally (available across all projects):
-
-```bash
-npx skills add basecamp/skills -g
-```
-
 **Verify:**
 ```bash
 npx skills list
-# Expected: basecamp skill listed
+# Expected: basecamp and basecamp-doctor listed (hey too, once it is published here)
 ```
 
-Restart your agent session to pick up the new skills. The basecamp skill provides full CLI coverage: projects, todos, cards, messages, files, schedule, check-ins, timeline, recordings, templates, webhooks, subscriptions, lineup, and campfire.
+Restart your agent session to pick up the new skills.
 
-EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop when `basecamp --version && basecamp auth status` both succeed and the basecamp skill is installed.
+EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop when `(n=0; for cli in basecamp hey fizzy; do command -v "$cli" >/dev/null || continue; n=1; "$cli" auth status --json | grep -q '"authenticated": true' || exit 1; done; [ "$n" = 1 ])` succeeds (at least one product CLI installed, every installed one signed in) and `npx skills list` shows the skills from this repo.
 
 ---
+
+## Optional: Homebrew installs
+
+**Do not execute this section unless explicitly requested.**
+
+```bash
+brew install --cask basecamp/tap/basecamp-cli
+brew install --cask basecamp/tap/hey
+brew install --cask basecamp/tap/fizzy
+```
 
 ## Optional: Manual installation
 
@@ -89,9 +105,9 @@ EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop when `b
 Clone this repo and symlink skills into your agent's skill directory manually:
 
 ```bash
-git clone https://github.com/basecamp/skills ~/.basecamp-skills
+git clone https://github.com/basecamp/skills ~/.37signals-skills
 mkdir -p ~/.claude/skills
-for skill in ~/.basecamp-skills/skills/*/; do
+for skill in ~/.37signals-skills/skills/*/; do
   ln -sfn "$skill" ~/.claude/skills/"$(basename "$skill")"
 done
 ```
@@ -100,7 +116,7 @@ For per-project installation:
 
 ```bash
 mkdir -p .claude/skills
-ln -sfn ~/.basecamp-skills/skills/basecamp .claude/skills/basecamp
+ln -sfn ~/.37signals-skills/skills/basecamp .claude/skills/basecamp
 ```
 
-Update with `cd ~/.basecamp-skills && git pull`. Symlinks pick up changes immediately.
+Update with `cd ~/.37signals-skills && git pull`. Symlinks pick up changes immediately.
