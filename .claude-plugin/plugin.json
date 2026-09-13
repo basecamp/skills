@@ -1,7 +1,7 @@
 {
   "name": "basecamp-skills",
-  "version": "0.1.0",
-  "description": "Basecamp skills for Claude Code — project management, todos, cards, messages, and more.",
+  "version": "0.2.0",
+  "description": "Agent skills for 37signals products — Basecamp, HEY, and Fizzy — each driving its product's CLI.",
   "author": {
     "name": "37signals",
     "email": "support@37signals.com"

@@ -2,8 +2,8 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "basecamp-skills",
   "metadata": {
-    "description": "Basecamp skills for Claude Code",
-    "version": "0.1.0"
+    "description": "Agent skills for 37signals products: Basecamp, HEY, and Fizzy",
+    "version": "0.2.0"
   },
   "owner": {
     "name": "37signals",
@@ -12,7 +12,7 @@
   "plugins": [
     {
       "name": "basecamp-skills",
-      "description": "Basecamp skills for Claude Code — project management, todos, cards, messages, and more.",
+      "description": "Agent skills for 37signals products — Basecamp, HEY, and Fizzy — each driving its product's CLI.",
       "source": "./",
       "category": "productivity"
     }
