@@ -13,7 +13,7 @@ For installation, see [install.md](install.md).
 |--------|--------|----------------|
 | [basecamp-cli](https://github.com/basecamp/basecamp-cli/tree/main/skills) | `basecamp`, `basecamp-doctor` | On each stable release |
 | [hey-cli](https://github.com/basecamp/hey-cli/tree/main/skills) | `hey` | On each stable release. Absent right now: see [#5](https://github.com/basecamp/skills/issues/5) |
-| [fizzy-cli](https://github.com/basecamp/fizzy-cli/tree/master/skills) | `fizzy` | Not yet; its release has no skills sync |
+| [fizzy-cli](https://github.com/basecamp/fizzy-cli/tree/master/skills) | `fizzy` | Not yet; a release sync is proposed in [fizzy-cli#214](https://github.com/basecamp/fizzy-cli/pull/214) |
 
 ## Key constraints
 

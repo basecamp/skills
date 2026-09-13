@@ -29,6 +29,9 @@ ships. Until then, get it from
 or run `hey skill install`, which installs it from the CLI itself.
 
 **fizzy** is not published here yet: fizzy-cli's release has no skills sync.
+One is proposed in
+[fizzy-cli#214](https://github.com/basecamp/fizzy-cli/pull/214); once it ships,
+the skill arrives with the next fizzy-cli release.
 Get it from
 [fizzy-cli/skills/fizzy](https://github.com/basecamp/fizzy-cli/tree/master/skills/fizzy),
 or run `fizzy skill install`.
