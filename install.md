@@ -2,7 +2,7 @@ I want you to install Agent Skills for 37signals products for me. Execute all st
 
 OBJECTIVE: Install the Basecamp, HEY, and Fizzy agent skills from basecamp/skills, plus the CLI behind each product you use, so your agent can work in Basecamp (required) and HEY and Fizzy (optional).
 
-DONE WHEN: `basecamp --version && basecamp auth status && (for cli in hey fizzy; do ! command -v "$cli" >/dev/null || "$cli" auth status || exit 1; done)` succeeds and `npx skills list` shows the basecamp skill.
+DONE WHEN: `basecamp --version && basecamp auth status --json | grep -q '"authenticated": true' && (for cli in hey fizzy; do ! command -v "$cli" >/dev/null || "$cli" auth status --json | grep -q '"authenticated": true' || exit 1; done)` succeeds and `npx skills list` shows the basecamp skill.
 
 ## TODO
 
@@ -36,8 +36,8 @@ basecamp auth login
 
 **Verify:**
 ```bash
-basecamp auth status
-# Expected: JSON with "authenticated": true
+basecamp auth status --json | grep -q '"authenticated": true' && echo OK
+# Expected: OK. The status command exits 0 even when signed out, so test the flag.
 ```
 
 ## Step 2: Install and sign in to HEY CLI
@@ -50,8 +50,8 @@ curl -fsSL https://hey.com/install-cli | bash && hey auth login
 
 **Verify:**
 ```bash
-hey version && hey auth status
-# Expected: a version line, then a signed-in status
+hey version && hey auth status --json | grep -q '"authenticated": true' && echo OK
+# Expected: a version line, then OK
 ```
 
 ## Step 3: Install and sign in to Fizzy CLI
@@ -64,8 +64,8 @@ curl -fsSL https://raw.githubusercontent.com/basecamp/fizzy-cli/master/scripts/i
 
 **Verify:**
 ```bash
-fizzy --version && fizzy auth status
-# Expected: fizzy version X.Y.Z, then JSON with "authenticated": true
+fizzy --version && fizzy auth status --json | grep -q '"authenticated": true' && echo OK
+# Expected: fizzy version X.Y.Z, then OK
 ```
 
 ## Step 4: Install skills
@@ -84,7 +84,7 @@ npx skills list
 
 Restart your agent session to pick up the new skills.
 
-EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop when `basecamp --version && basecamp auth status && (for cli in hey fizzy; do ! command -v "$cli" >/dev/null || "$cli" auth status || exit 1; done)` succeeds and `npx skills list` shows the basecamp skill.
+EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop when `basecamp --version && basecamp auth status --json | grep -q '"authenticated": true' && (for cli in hey fizzy; do ! command -v "$cli" >/dev/null || "$cli" auth status --json | grep -q '"authenticated": true' || exit 1; done)` succeeds and `npx skills list` shows the basecamp skill.
 
 ---
 
