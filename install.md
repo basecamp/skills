@@ -42,10 +42,12 @@ basecamp auth status --json | grep -q '"authenticated": true' && echo OK
 
 ## Step 2: Install and sign in to HEY CLI
 
-Only if you use HEY; otherwise mark this TODO done and continue. Skip the install if `hey version` already succeeds. See the [HEY CLI install guide](https://github.com/basecamp/hey-cli/blob/main/docs/install.md) for other install methods. Sign-in opens a browser. The last command installs the hey skill from the CLI itself, since it is temporarily missing from this repo (see the [README](README.md)).
+Only if you use HEY; otherwise mark this TODO done and continue. Run all three lines: the first installs the CLI only when `hey` is not already on PATH (see the [HEY CLI install guide](https://github.com/basecamp/hey-cli/blob/main/docs/install.md) for other install methods), the second signs in only when not already signed in (it opens a browser), and the third installs the hey skill from the CLI itself, since it is temporarily missing from this repo (see the [README](README.md)) — it runs even when the CLI was already installed.
 
 ```bash
-curl -fsSL https://hey.com/install-cli | bash && hey auth login && hey skill install
+command -v hey >/dev/null || curl -fsSL https://hey.com/install-cli | bash
+hey auth status --json | grep -q '"authenticated": true' || hey auth login
+hey skill install
 ```
 
 **Verify:**
@@ -56,10 +58,12 @@ hey version && hey auth status --json | grep -q '"authenticated": true' && echo 
 
 ## Step 3: Install and sign in to Fizzy CLI
 
-Only if you use Fizzy; otherwise mark this TODO done and continue. Skip the install if `fizzy --version` already succeeds. See the [Fizzy CLI README](https://github.com/basecamp/fizzy-cli#quick-start) for other install methods. `fizzy setup` asks for a personal access token and an account. The last command installs the fizzy skill from the CLI itself, since it is not published in this repo yet (see the [README](README.md)).
+Only if you use Fizzy; otherwise mark this TODO done and continue. Run all three lines: the first installs the CLI only when `fizzy` is not already on PATH (see the [Fizzy CLI README](https://github.com/basecamp/fizzy-cli#quick-start) for other install methods), the second runs `fizzy setup` — which asks for a personal access token and an account — only when not already signed in, and the third installs the fizzy skill from the CLI itself, since it is not published in this repo yet (see the [README](README.md)) — it runs even when the CLI was already installed.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/basecamp/fizzy-cli/master/scripts/install.sh | bash && fizzy setup && fizzy skill install
+command -v fizzy >/dev/null || curl -fsSL https://raw.githubusercontent.com/basecamp/fizzy-cli/master/scripts/install.sh | bash
+fizzy auth status --json | grep -q '"authenticated": true' || fizzy setup
+fizzy skill install
 ```
 
 **Verify:**
