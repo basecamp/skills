@@ -2,7 +2,7 @@ I want you to install Agent Skills for 37signals products for me. Execute all st
 
 OBJECTIVE: Install the agent skills for the 37signals products you use — Basecamp, HEY, Fizzy, any or all — plus the CLI behind each, so your agent can work in those products.
 
-DONE WHEN: `(n=0; for cli in basecamp hey fizzy; do command -v "$cli" >/dev/null || continue; n=1; "$cli" auth status --json | grep -q '"authenticated": true' || exit 1; done; [ "$n" = 1 ])` succeeds (at least one product CLI installed, every installed one signed in) and `npx skills list` shows the skills from this repo.
+DONE WHEN: every product you chose in the TODO reports signed in (`<cli> auth status --json | grep -q '"authenticated": true'` succeeds for each of `basecamp`, `hey`, `fizzy` that you chose — at least one, and only those; a CLI on this machine for a product you did not choose is left alone) and `npx skills list` shows the skills from this repo.
 
 ## TODO
 
@@ -84,7 +84,7 @@ npx skills list
 
 Restart your agent session to pick up the new skills.
 
-EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop when `(n=0; for cli in basecamp hey fizzy; do command -v "$cli" >/dev/null || continue; n=1; "$cli" auth status --json | grep -q '"authenticated": true' || exit 1; done; [ "$n" = 1 ])` succeeds (at least one product CLI installed, every installed one signed in) and `npx skills list` shows the skills from this repo.
+EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop when every product you chose in the TODO reports signed in (`<cli> auth status --json | grep -q '"authenticated": true'` succeeds for each of `basecamp`, `hey`, `fizzy` that you chose — at least one, and only those; a CLI on this machine for a product you did not choose is left alone) and `npx skills list` shows the skills from this repo.
 
 ---
 
