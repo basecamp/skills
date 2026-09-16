@@ -1,2 +1,4 @@
-basecamp
-basecamp-doctor
+# Superseded by the per-source manifests (.managed-skills.<cli>), one per publishing CLI.
+# Each CLI deletes only the skill directories listed in its own manifest.
+# Kept so a CLI still running the pre-fix sync script deletes nothing: that script skips
+# every line it cannot parse as a skill name and only deletes names it can.
