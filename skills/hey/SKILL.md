@@ -151,6 +151,7 @@ notice on stderr. Both need list data, so they work on `hey box list`, `hey box 
 | Task | Command |
 |------|---------|
 | List linked mail accounts | `hey account list --json` |
+| List sender addresses and IDs | `hey account senders --json` |
 | Set default mail account | `hey account use <id\|all>` |
 | Run once for one account | `hey --account <id> box list --json` |
 | Review trusted local settings | `hey config trusted-locals --json` |
@@ -204,6 +205,8 @@ notice on stderr. Both need list data, so they work on `hey box list`, `hey box 
 | Draft a reply for human review | `hey reply <topic_id> -m "Drafting this." --draft` |
 | Read a draft back | `hey draft show <draft_id> --json` |
 | Change a draft | `hey draft edit <draft_id> --to alice@example.com --subject "New subject"` |
+| Change a draft sender | `hey draft edit <draft_id> --from billing@example.org` |
+| Compose from a selected address | `hey compose --from billing@example.org --to alice@example.com --subject "Board update" -m "Numbers to follow." --draft` |
 | Send a draft | `hey draft send <draft_id>` |
 | Trash drafts | `hey draft delete <draft_id>...` |
 | Who is waiting in The Screener | `hey screener list --json` (clearance IDs) |
@@ -441,8 +444,14 @@ hey unshare <thread_id>                       # Turn off the sharing link
 `hey thread read` returns every entry in the thread, oldest first. Each entry's `body` is
 **Markdown**, converted from HEY's Trix HTML at the edge, so headings, lists, quotes,
 tables and code survive and links keep their URLs — read it as structure rather than as
-flattened text. `--html` returns the original HTML instead. There is no `recipients` field
-on an entry; use `hey reply`, which works the addressing out itself.
+flattened text. An entry whose message was read also carries `recipients`, with `to`,
+`cc` and `bcc` contact lists; a known-empty line is `[]`, while an entry whose message
+was not hydrated omits the object. In JSON, an inbound entry also carries `received_via`:
+every exact account address HEY recorded it arriving through, including aliases and plus
+tags. These delivery records are distinct from visible To/CC/BCC recipients. Each one's
+resolved `contact` is optional; `received_via` is omitted for sent/generated messages and
+when the message was not hydrated. `--html` returns the original body HTML framed by From,
+To, CC and BCC header rows. Use `hey reply` to have HEY work out reply addressing.
 
 `hey share` returns a URL that shows the entire thread and future emails or replies sent to it. Anyone with the link can open it. `hey unshare` turns off the sharing link.
 
@@ -686,6 +695,8 @@ hey event add "Design review" --starts-on 2026-09-02 --start-time 14:00 --end-ti
 hey event add "Sarah's birthday" --starts-on 2026-09-02   # No time given, so all day
 hey event add "Standup" --start-time 09:15 --repeat every_weekday --remind 10m
 hey event edit 4821 --title "Design review (moved)"
+hey event edit 4821 --occurrence 4821_2026-09-15 --apply-to current --start-time 15:00 --json   # That day alone
+hey event edit 4821 --occurrence 4821_2026-09-15 --apply-to future --repeat every_week --repeat-times 8 --title "Design review (v2)" --allow-plain-notes --json
 hey event delete 4821
 ```
 
@@ -695,14 +706,18 @@ repeating event lists once as its series, not once per day.
 
 **"What's on my schedule today?" is `hey event day`, not `list`.** A day or a week is the
 span as HEY draws it: a repeating event is expanded into the occurrences inside it, each
-carrying that day's own times and an `occurrence_id`, with its `id` still naming the
-series that `edit` and `delete` take. The period covers the calendars switched on in HEY,
+carrying that day's own times and an `occurrence_id`. A virtual occurrence has the series
+in `id` and `parent_id`; a day HEY has written out on its own keeps its own event ID in
+`id` and `recording_id`, with the series in `parent_id`. That own ID acts on the day alone.
+Styled period tables that contain occurrences print `Series ID`, `Occurrence ID` and
+`Recording ID` beside `ID`. The period covers the calendars switched on in HEY,
 so `day` and `week` take no `--calendar` — only `--limit` and `--all`.
 
 **Response format:** a flat array of events. Each has `id`, `title`, `starts_at`, `ends_at`,
-`all_day`, `recurring`, `starts_at_time_zone` and `calendar`; one being edited also carries
-`description` (the notes, as plain text), `location`, `url`, `attached_entry` and
-`reminders`. `--count` and `--ids-only` read that array directly.
+`all_day`, `recurring`, `starts_at_time_zone` and `calendar`; a realized occurrence also
+has `recording_id`, and one being edited carries `description` (the notes, as plain text),
+`location`, `url`, `attached_entry` and `reminders`. `--count` and `--ids-only` read that
+array directly.
 
 **Editing is a replacement, not a patch.** `hey event edit` reads the event first and
 sends back the notes, location, link, attached email, reminders and time zones it is not
@@ -711,6 +726,54 @@ notes come back as plain text, so their formatting is flattened, and a countdown
 served at all, so an edit removes one unless `--countdown` names it again. An event that
 cannot be read is refused rather than written blind — pass the day it starts
 (`hey event edit 4821 2026-09-02`) or `--calendar` to narrow the search.
+
+**An id alone edits the whole series; one day of it is `--occurrence` plus `--apply-to`.**
+`--occurrence` takes the `occurrence_id` from `day` or `week` exactly as served
+(`<series id>_<YYYY-MM-DD>`, naming the series the positional id names) and `--apply-to`
+is required with it: `current` changes that day alone, `future` changes that day and every
+one after it — HEY's own two choices. `--apply-to` without `--occurrence`, any other value,
+a malformed or mismatched occurrence id, or `--repeat`/`--repeat-until`/`--repeat-times`
+with `current` are usage errors, refused before anything is read. The day is read on its
+own date, so leave `[date]` out or name that day. A `future` edit starts a new series and
+requires `--repeat` to state its complete schedule; combine a preset with `--repeat-times`
+or `--repeat-until` for a finite series, naming what remains from the edited day, or use
+`--repeat custom` without either limit to copy an existing opaque schedule. A custom rule
+with `COUNT` can restart its full count because HEY cannot expose how many occurrences remain.
+HEY accepts the new series' submitted start even when it overlaps an earlier occurrence,
+so choose its date and time deliberately; its last day cannot precede its first day. A
+virtual day of an opaque custom schedule takes its exact time from HEY's Day view and is
+refused if that view no longer serves it. A realized custom day is refused for `future`,
+because HEY does not serve the rule's authoritative occurrence boundary; split from a
+virtual occurrence, edit that day alone, or edit the whole series. A realized preset occurrence moved away from its
+series time is also refused: move it back with a `current` edit first. Haystack cancels
+children from the moved time but truncates the parent at the occurrence identifier, so
+splitting directly can lose neighboring realized edits. A preset `--repeat` alone means
+forever. HEY gives
+the new series a new id, and the answer is still
+the day edited — read `day` or `week` again before editing it further.
+
+An occurrence edit keeps everything it is not told to change — that day's own schedule,
+zones, notes, location, link, attached email, reminders, circle and countdown, from the day
+itself where HEY has already written it out — and refuses what it cannot keep. A countdown
+owned by the day is read back and re-sent; an inherited series countdown stays inherited
+for `current` and is copied to the replacement series for `future`. Only `--countdown 0`
+removes it, and not from one day of a series that has one, since HEY shows the day the
+series' countdown regardless — use `future` or edit the series. Notes HEY serves only as
+plain text, so an edit that
+would send notes back as text is refused unless `--allow-plain-notes` accepts the loss or
+`--notes` replaces them; an event with no notes needs neither. A `future` edit builds the
+new series from the series' own guest list and sends invitations, so a day whose guests
+differ from the series' is refused until `--invite` names the new list. With
+`--occurrence`, `--calendar` is only the calendar the day moves to: the day is read over
+every calendar, and a day already moved elsewhere stays there. A day HEY has written out
+lists in `day`/`week` with its own event ID in `id` and `recording_id`, plus the series in
+`parent_id`; `edit <id>`/`delete <id>` act on that day alone. Use the series id as the
+positional id with `--occurrence`. An attached email you cannot read is
+not served and is detached by any
+edit, whole event or one day — nothing client-side can keep it. HEY answers not-found for
+a date that is not a day of the series and for a series you cannot edit alike. The JSON
+envelope is the one every mutation writes: `summary` (`Occurrence updated` or `Occurrence
+and the following updated`) and `data` holding the recording HEY answered.
 
 An event with no `--start-time` is all-day; a `--start-time` with no `--end-time` runs an
 hour. Clock times are read in `--time-zone`, defaulting to the machine's zone.
@@ -810,3 +873,12 @@ HEY_NONINTERACTIVE=1 hey setup --json          # No prompts and no OAuth wait �
 ```
 
 Run `hey auth login` only when the user is present and explicitly asks to authenticate.
+
+### Sender selection
+
+`account senders` lists configured sender IDs and addresses within `--account`.
+`compose --from <email-or-id>` sends directly as that sender and applies its active
+Name Tag unless `--no-name-tag` is set; `--draft` saves without sending.
+`draft edit --from` stays in the draft's account and preserves the existing body,
+including signatures. Replace the body explicitly when needed. `draft show`
+includes From. These commands do not persist a default.
