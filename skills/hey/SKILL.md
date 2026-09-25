@@ -119,7 +119,7 @@ CLI for HEY: mailboxes, labels, collections, email threads, contacts, replies, c
 **MUST follow these rules:**
 
 1. **Choose the right structured output** — use `--jq '<expression>'` to filter or extract fields and `--json` for the full response. Never pipe to an external `jq`; `--jq` is built in and implies `--json`.
-2. **Reuse stored authentication** — run the requested data command; it uses stored credentials and refreshes expiring OAuth tokens automatically. If it returns an auth error, report the task as blocked. Use `hey auth status --json` when an explicit authentication check is needed. Never run `hey auth login` unattended; use it only for interactive recovery with the user present.
+2. **Reuse stored authentication** — run the requested data command; it uses stored credentials and refreshes expiring OAuth tokens automatically. If it returns an auth error, follow the one-command macOS/Codex retry in [Authentication](#authentication) before you report the task as blocked. Use `hey auth status --json` when an explicit authentication check is needed. Never run `hey auth login` unattended; use it only for interactive recovery with the user present.
 3. **HTML output** is available via `--html` for commands that return HTML content
 4. **Linked mail accounts share one login** — use `hey account list --json`, then `--account <id|all>` when a task must target one account
 5. **Local HEY configuration requires human trust** — never run `hey config trust-local` without the user's explicit approval
@@ -444,9 +444,11 @@ hey unshare <thread_id>                       # Turn off the sharing link
 `hey thread read` returns every entry in the thread, oldest first. Each entry's `body` is
 **Markdown**, converted from HEY's Trix HTML at the edge, so headings, lists, quotes,
 tables and code survive and links keep their URLs — read it as structure rather than as
-flattened text. An entry whose message was read also carries `recipients`, with `to`,
-`cc` and `bcc` contact lists; a known-empty line is `[]`, while an entry whose message
-was not hydrated omits the object. In JSON, an inbound entry also carries `received_via`:
+flattened text. `creator` is the account user; when HEY records a separate From address,
+a hydrated entry also has `sender`. Use `sender.email_address` for the actual From;
+fall back to `creator.email_address` only when the message was read and `sender` is absent.
+An entry whose message was read also carries `recipients`, with `to`, `cc` and `bcc` contact lists; a known-empty
+line is `[]`, while an entry whose message was not hydrated omits the object. In JSON, an inbound entry also carries `received_via`:
 every exact account address HEY recorded it arriving through, including aliases and plus
 tags. These delivery records are distinct from visible To/CC/BCC recipients. Each one's
 resolved `contact` is optional; `received_via` is omitted for sent/generated messages and
@@ -475,6 +477,8 @@ Direct attachment IDs combine the message ID and position, so `67890:1` identifi
 ```bash
 hey reply <topic_id> -m "Friday works for me — I'll send an agenda."  # Inline message
 hey reply <topic_id>                          # Reply via $EDITOR
+hey reply <topic_id> --to support@example.com -m "The replacement is on the way."
+hey reply <topic_id> --to support@example.com --replace-recipients --dry-run --json
 hey reply <topic_id> -m "Here is the wiring diagram." --attach ./diagram.png
 hey forward <topic_id> --to alice@example.com                 # Forward the latest message
 hey forward <topic_id> --to alice@example.com -m "Please review before Thursday."
@@ -490,8 +494,13 @@ hey compose --to alice@example.com --subject "Newsletter draft" --message-html "
 
 `hey reply` answers the thread's **latest** entry. HEY addresses the reply the way its own
 web app does: everyone that entry was addressed to, plus whoever wrote it, on the To line.
-A reply HEY cannot address is saved as a draft rather than sent, so the command fails
-rather than guessing when it cannot work out the recipients.
+Repeatable `--to`, `--cc` and `--bcc` flags add or move explicit recipients. Use
+`--replace-recipients` to discard HEY's prefill. Run `--dry-run --json` first when an
+agent changes the envelope; it does not read the original message body and reports the
+resolved sender and final recipients without sending. If HEY's envelope prefill is
+unavailable, use `--replace-recipients` with explicit addresses because a dry run will not
+guess the original lists. A reply HEY cannot address is refused unless an explicit
+recipient makes it addressable.
 
 Everything you send is Markdown by default — `-m`, `--content`, `--note`, positional
 content, stdin, and `$EDITOR` alike — and is converted to rich text on the way out. To
@@ -851,7 +860,9 @@ error.
 
 Data commands use the credentials HEY already stores and refresh expiring OAuth tokens automatically. Run the requested data command without a login preflight. Use `hey auth status --json` when the user asks for authentication status or when an explicit authentication check helps diagnose a failure; it reports whether credentials are available without changing them.
 
-If a data command returns exit code 3 with `"code": "auth"`, report that authentication is required and the task is blocked. Tell the user to run `hey auth login`; do not run it for them unattended.
+If a data command returns exit code 3 with `"code": "auth"`, authentication is unavailable to that process. On macOS under Codex, the sandbox can hide credentials that the HEY CLI stores in Keychain. Before reporting the task as blocked, use the harness's normal approval flow to retry `hey auth status --json` once with elevated sandbox permission. Limit the escalation to this one read-only command. If the response's `data.authenticated` is `true`, rerun only the exact `hey` command the user requested through a separate one-command approval. If `data.authenticated` is `false` or the status command fails, report the task as blocked and tell the user to run `hey auth login`; do not run it for them unattended.
+
+Never run the macOS `security` command to read Keychain contents, print or copy credentials, or move credentials into a file; never disable the sandbox globally; never set `HEY_NO_KEYRING=1` as an authentication workaround.
 
 Piped, machine-output and non-TTY commands do not prompt for sign-in. When an agent harness runs commands under a PTY, set `HEY_NONINTERACTIVE=1` so a missing login returns the same actionable auth error instead of opening an interactive prompt.
 
