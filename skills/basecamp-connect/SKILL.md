@@ -82,17 +82,35 @@ Each becomes a flag on setup (*First-time setup*, step 4):
 
 Then:
 
+0. **Versions and leftovers**, once per session (*Before anything*).
 1. **Which agent.** Use the profile they name. With none, read
    `~/.config/basecamp-connect/last.json` (below) and confirm it. With neither,
    list profiles (`basecamp profile list --json`) and ask.
 2. **Set up, if needed.** `basecamp connect show -P '<profile>' --json`. A
-   `not_found` or `unknown profile` error means it isn't set up: follow
-   *First-time setup*. If they asked for a change, run setup with it.
+   `not_found` or `unknown profile` error, or one saying no profiles are
+   configured, means it isn't set up: follow *First-time setup*, whatever
+   the error's hint says. If they asked for a change, run setup with it.
 3. **Start the connector** (*Running the connector*) and watch it.
 4. **Handle each request** (*For each request*), until they ask you to stop.
 
 Trust and served projects are read when the connector starts. After any setup
 change while it runs, stop it and start it again.
+
+### Before anything
+
+- **The CLI.** `basecamp --version` must say 0.13.0 or later: 0.11 and older
+  have neither `basecamp auth agent connect` nor `basecamp connect`, and this
+  skill uses setup flags 0.13.0 added. Run
+  `basecamp upgrade`, tell the person, and check again. If it refuses because a
+  package manager installed the CLI, give them the command its hint names, and
+  stop until it's done.
+- **The legacy skill.** A `basecamp-connect` skill from
+  `basecamp-local-agent-connector` (a symlink into that checkout, or a SKILL.md
+  describing `bin/connect`) in `~/.claude/skills` or a project's
+  `.claude/skills` is the retired connector's. This skill is installed, so
+  it's safe to remove: delete a symlink into that checkout, but ask before
+  deleting a real directory, which may be tracked in a repo. Tell the person
+  what you removed. Never remove the one in this plugin.
 
 ### Remembered settings
 
@@ -160,10 +178,16 @@ so you can show the link and code while they wait.
 Ask only what you can't find out.
 
 **1. Profile and credential.** Agree a profile name (letters, digits, `-` and
-`_`), for example the agent's name. Check it: `basecamp auth status -P
+`_`, starting with a letter or digit), for example the agent's name. Check it: `basecamp auth status -P
 '<profile>' --json`.
 
-- `unknown profile`: it doesn't exist. Connect the agent with
+- `unknown profile`, or an error saying no profiles are configured (a
+  computer with none yet): it doesn't exist. Never run `basecamp profile
+  create` for an agent: that signs in a person. If Basecamp's instructions
+  page connected this agent over HTTP before (a
+  `~/.basecamp-agent/credentials.json`; never read it), say first that
+  connecting replaces that connection, so they approve once more and the
+  file stops working. Then connect the agent with
   `basecamp auth agent connect -P '<profile>'` (add `--no-browser` if the person
   is on another device). Show the link and code. They open the link, check the
   code, choose the agent (or create one) and approve.
@@ -199,7 +223,8 @@ count only from the operator, in every mode, unless they ask for the people
 named with `--allow` to assign work too: `--allow-assignments-from-authorized`
 (and `=false` to undo it), which covers everyone on the allowlist. For a personal agent pass no operator flag: setup
 takes its owner. For any other agent, name the operator by their own CLI
-profile with `--operator-profile '<profile>'`. For allowlist, or operators
+profile with `--operator-profile '<profile>'`, or by person id with
+`--operator <id>` when they have no profile on this computer. For allowlist, or operators
 beside project trust, look up each person's id with
 `basecamp people list --json`,
 and pass `--allow <id>` for each.
@@ -220,9 +245,13 @@ each project by name. Then:
 basecamp connect setup -P '<profile>' --serve <project-id> --serve <project-id> --json
 ```
 
-adding `--trust`, `--allow`, `--allow-assignments-from-authorized` or
-`--operator-profile` as chosen, and on the bot-user path
+adding `--trust`, `--allow`, `--allow-assignments-from-authorized`,
+`--operator-profile` or `--operator` as chosen, and on the bot-user path
 `--expect-identity <bot-identity-id>`.
+
+**5. Start the connector** right away (*Running the connector*), unless the
+person said not to. Connecting, setup and the watcher are one flow: don't stop
+after setup to ask whether to start it.
 
 ### Reading setup's result
 
