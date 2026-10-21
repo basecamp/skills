@@ -62,9 +62,8 @@ Claude Code only. The connector runs on Linux and macOS.
 
 ### 1. Start it, and watch its output
 
-Only one connector per agent can run at a time. If it's already running
-elsewhere, it refuses to start and says so: tell the person, and don't start a
-second.
+One connector per profile can run in this state directory. If another holds
+its lock, it refuses: tell the person, and don't start a second.
 
 Start it in the background with the Bash tool (`run_in_background: true`), and
 note the output file the harness reports:
@@ -188,10 +187,10 @@ refusal above, the holding reply below) post as step 5 of `subagent.md` does.
 
 ### a. Acknowledge, within seconds
 
-With `ack` on the line, the connector boosted `ack.content`: reword it to a
-short phrase that fits the request (16 characters at most), never a fixed
-string. Otherwise, only when `acknowledge` is true, boost: this loop with
-`boost create '<recording.url>'`. A reply due within moments (a quick question)
+With `ack` on the line, the connector boosted `ack.content`: reword it to fit
+the request, emoji first (16 characters at most), never a fixed string.
+Otherwise, only when `acknowledge` is true, boost: this loop with
+`boost create '<recording.url>' --ids-only`, printing `$out`'s digits line. A reply due within moments (a quick question)
 is the acknowledgement: leave the boost, or give none, and say so in the
 handoff; not for card work, where the boost shows the request landed.
 
@@ -201,7 +200,7 @@ for i in 1 2 3; do
   if out=$(basecamp boost update <ack.boost_id> '<ack>' --profile '<profile>' 2>&1); then
     landed=true; break
   fi
-  echo "$out" | grep -qE 'Not authenticated for|token refresh failed' || break   # anything else: no retry
+  echo "$out" | grep -qE 'Not authenticated for|token refresh failed' || break
   sleep 2
 done
 [ "$landed" = true ] || { echo "boost did not verifiably land: $out" >&2; false; }
@@ -285,7 +284,7 @@ to finish without this session:
 - the agent's profile name, and the repo path (or "no repo"). A subagent
   doesn't start in that repo by itself: say plainly that it must work there;
 - whether an acknowledgement is still owed (no boost landed), or not owed
-  (one landed, the connector's included);
+  (one landed, the connector's included), with its id;
 - the full content of the project's AGENTS.md document and any repo mapping used,
   or the explicit
   result "AGENTS.md checked: none found";
@@ -456,9 +455,13 @@ Check it: `basecamp auth status -P '<profile>' --json`.
   computer with none yet): it doesn't exist. Never run `basecamp profile
   create` for an agent: that signs in a person. If Basecamp's instructions
   page connected this agent over HTTP before (a
-  `~/.basecamp-agent/credentials.json`; never read it), say first that
-  connecting replaces that connection, so they approve once more and the
-  file stops working. Then connect the agent with
+  `~/.basecamp-agent/credentials.json`; never read it), ask whether the agent
+  is personal or shared. Warn before approval: an agent whose kind (personal
+  or shared) doesn't have adding enabled replaces the existing connection;
+  one whose kind does keeps both live. Read the approval page, never
+  assume adding is enabled. Don't delete credential files. If the owner says
+  nothing uses the old file, have them disconnect its connection in Basecamp,
+  then remove that unused file themselves. Then connect the agent with
   `basecamp auth agent connect -P '<profile>' --json` (add `--no-browser` if
   the person is on another device). Show them the link and code from its
   verification line. They open the link, check the code, choose the agent (or
@@ -466,8 +469,9 @@ Check it: `basecamp auth status -P '<profile>' --json`.
 - `oauth_type` `agent`: an agent is already connected under it. If you chose
   this name for a new agent, that's another agent's profile: pick another
   name (`build-bot-2`, then `-3`) and check again. If the person named it,
-  don't connect again: that rotates the agent's secret and disconnects any
-  other computer using it.
+  don't connect again: approval may replace an existing connection, or add
+  one and leave this profile's old connection live until disconnected in
+  Basecamp.
 - Anything else: a person's login is stored. Never connect an agent over it:
   pick another name if you chose this one, and ask if they did.
 
@@ -529,7 +533,9 @@ it, and `--trust operator` clears it; setup refuses `--trust operator` with
 
 **Acknowledgement.** By default the connector boosts each request that asks
 for something with 👀, as the agent, before printing it, and this session then
-rewords that boost. `--ack-boost '<content>'` changes the boost (16 characters
+rewords that boost; the subagent clears it as it posts its reply, so it never
+stays behind as the request's last word in the Boost report.
+`--ack-boost '<content>'` changes the boost (16 characters
 at most), and `--no-ack-boost` turns it off, leaving acknowledging to this
 session. Neither is asked about on a first setup; pass one only when the
 person wants it.
@@ -538,7 +544,9 @@ person wants it.
 can serve only projects it's a member of. List its projects
 (`basecamp projects list -P '<profile>' --json`; if that's refused under an
 Agent identity, list the person's own projects with their login, a profile
-whose `auth status` isn't `oauth_type` `agent`, never another agent's). Unless
+whose `auth status` isn't `oauth_type` `agent`, never another agent's, in the
+agent's account: `--account` with the `account_id` the agent's `auth status`
+reports, since the person's login may default to another). Unless
 the person named projects, serve every one it's in, without asking. The
 person's own list is the agent's only for a personal agent, which follows its
 owner; for any other agent, ask which of them it's in. A personal agent is in all
@@ -599,7 +607,8 @@ Failed checks worth knowing:
 - **Stream ticket refused.** The account event feed isn't enabled for this
   account or agent. That's a Basecamp setting the person has to ask for.
 - **Scope: not full access.** The agent couldn't reply. Connect again with full
-  access, with the person's consent, since it rotates the secret.
+  access only with consent: approval may replace the existing connection,
+  or add one and leave the read-only connection live. Check the approval page.
 
 **Never edit connect.json by hand**, and never read it directly: use
 `basecamp connect show -P '<profile>' --json`, which checks the file is safe
@@ -610,11 +619,12 @@ first. Every change goes through setup, which keeps whatever you don't pass.
 The background task notifies you when the connector exits. Read the end of its
 output and tell the person what it means:
 
-- **"was disconnected in Basecamp, or connected on another computer"**: run
+- **"was disconnected in Basecamp, or replaced by a newer connection"**: run
   `basecamp connect setup -P '<profile>'` (it reconnects with one approval),
   then start it again.
-- **Already running**: another connector for this agent holds its lock, on
-  this computer or in another session. Don't start a second.
+- **Already running**: another connector holds the profile's lock in this
+  state directory. Don't start a second. An older build holding legacy state
+  must be stopped and its existing profile restarted on this build first.
 - **`BASECAMP_TOKEN` is set**: the person unsets it, then you start it again.
 - **Anything else**: show the error, and run `basecamp connect doctor -P
   '<profile>'`.
