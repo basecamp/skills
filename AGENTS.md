@@ -12,8 +12,8 @@ For installation, see [install.md](install.md).
 | Source | Skills | Publishes here |
 |--------|--------|----------------|
 | [basecamp-cli](https://github.com/basecamp/basecamp-cli/tree/main/skills) | `basecamp`, `basecamp-doctor` | On each stable release |
-| [hey-cli](https://github.com/basecamp/hey-cli/tree/main/skills) | `hey` | On each stable release. Absent right now: see [#5](https://github.com/basecamp/skills/issues/5) |
-| [fizzy-cli](https://github.com/basecamp/fizzy-cli/tree/master/skills) | `fizzy` | Not yet; a release sync is proposed in [fizzy-cli#214](https://github.com/basecamp/fizzy-cli/pull/214) |
+| [hey-cli](https://github.com/basecamp/hey-cli/tree/main/skills) | `hey` | On each stable release |
+| [fizzy-cli](https://github.com/basecamp/fizzy-cli/tree/master/skills) | `fizzy` | Not yet; the release sync from [fizzy-cli#214](https://github.com/basecamp/fizzy-cli/pull/214) first runs on fizzy-cli's next stable release |
 
 ## Key constraints
 
@@ -38,12 +38,11 @@ For installation, see [install.md](install.md).
 skills/
   basecamp/SKILL.md              # Synced from basecamp-cli
   basecamp-doctor/SKILL.md       # Synced from basecamp-cli
-  hey/SKILL.md                   # Synced from hey-cli (absent until its next release, see #5)
+  hey/SKILL.md                   # Synced from hey-cli
 .managed-skills.basecamp-cli     # Skill directories owned by basecamp-cli's sync
 .managed-skills.hey-cli          # Skill directories owned by hey-cli's sync
 .managed-skills                  # Legacy shared manifest, comment-only tombstone
 ```
 
-The per-source manifests and the tombstone appear with the first release of
-each CLI after its sync fix ships; until then the legacy `.managed-skills` is
-the only manifest present.
+`.managed-skills.fizzy-cli` and `skills/fizzy/` appear with fizzy-cli's first
+stable release after its sync landed.

@@ -3,7 +3,7 @@
   "name": "basecamp-skills",
   "metadata": {
     "description": "Agent skills for 37signals products: Basecamp, HEY, and Fizzy",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "owner": {
     "name": "37signals",
@@ -12,7 +12,7 @@
   "plugins": [
     {
       "name": "basecamp-skills",
-      "description": "Agent skills for 37signals products, each driving its product's CLI. Bundles the Basecamp skills today; HEY and Fizzy join as their CLIs publish here (see the README).",
+      "description": "Agent skills for 37signals products, each driving its product's CLI. Bundles the Basecamp and HEY skills today; Fizzy joins when fizzy-cli publishes here (see the README).",
       "source": "./",
       "category": "productivity"
     }
