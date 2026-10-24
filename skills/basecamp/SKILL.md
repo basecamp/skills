@@ -10,6 +10,7 @@ triggers:
   - basecamp todos
   - basecamp subtasks
   - basecamp project
+  - project wallpaper
   - basecamp cards
   - basecamp chat
   - basecamp campfire
@@ -20,6 +21,7 @@ triggers:
   - basecamp document
   - basecamp bookmarks
   - basecamp bubble-up
+  - basecamp spotlight
   - basecamp drafts
   - basecamp notes
   - basecamp calendars
@@ -216,6 +218,42 @@ basecamp pings messages "Jane Smith" --agent
   `chat line`; edit or delete such a message with `chat update` or `chat delete`
   on that URL.
 
+## Spotlights
+
+A spotlight puts a recording's card in the Spotlights area of its project's home
+page. It is not a pin: `messages pin` only keeps a message at the top of its
+Message Board. `spotlight` is a top-level command, outside every recording
+type's group, and takes the ID or URL of a message, document, file, to-do list,
+to-do, card, card column, check-in question, schedule entry and more.
+`unspotlight` removes it, as "Remove Spotlight" does in Basecamp.
+
+```bash
+basecamp spotlight <id|url> --agent
+basecamp unspotlight <id|url> --agent
+```
+
+## Project wallpaper
+
+The wallpaper is the image behind a project's pages. The `projects wallpaper`
+group sets, lays out, and removes it, for the project in `--in`/`--project` or
+the configured default:
+
+```bash
+basecamp projects wallpaper set skyline.jpg --mode tile --in "<project>" --json
+basecamp projects wallpaper mode fill --in "<project>" --json
+basecamp projects wallpaper remove --in "<project>" --json
+```
+
+- People and personal assistants follow project-edit permissions. Shared
+  agents are refused (403); do not retry or route around that refusal.
+- The CLI checks the file's size and MIME hint before uploading; leaf help
+  names the limits. Server image validations still apply. `--mode` is `fill`
+  or `tile`, and leaving it out keeps the current mode.
+- Each command returns the project. `.data.wallpaper` is `{url, mode}`, and is
+  absent when the project has none; `projects show` carries the same field.
+  The URL requires authentication and redirects to the image; it is not a
+  public image link.
+
 ## Content and stdin
 
 Command help declares content arguments and stdin support. Titles are generally
@@ -283,6 +321,11 @@ Structured failures include `error`, `code`, `retryable`, and often `hint`.
   known verdicts and unclassified failures. Inspect `code`, `error`, and `hint`
   before choosing recovery, and do not blindly repeat the same call.
 - For usage errors, inspect leaf help and supply the named positional argument.
+- If the CLI rejects a command or flag as unknown, check the group's help for
+  its current form first. If this skill names it and the help lacks it, the CLI
+  and this skill may come from different releases: `basecamp doctor --json`
+  reports both versions. Name the older side to the user: `basecamp upgrade`
+  for the CLI, or updating the plugin.
 - For ambiguous names, use an ID or add the missing project/container scope.
 - For auth or connectivity diagnosis, use `basecamp doctor --json` and
   `basecamp auth status --json` before changing credentials.
