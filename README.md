@@ -16,23 +16,12 @@ full setup, including installing and authenticating each CLI.
 |-------|---------|----------------|-------------|
 | [basecamp](skills/basecamp/SKILL.md) | Basecamp | [basecamp-cli](https://github.com/basecamp/basecamp-cli/tree/main/skills/basecamp) | Interact with Basecamp via the Basecamp CLI. Full API coverage: projects, todos, cards, messages, files, schedule, check-ins, timeline, recordings, templates, webhooks, subscriptions, lineup, chat, pings, gauges, assignments, notifications, bookmarks, bubble-up, drafts, notes, calendars, and accounts. |
 | [basecamp-doctor](skills/basecamp-doctor/SKILL.md) | Basecamp | [basecamp-cli](https://github.com/basecamp/basecamp-cli/tree/main/skills/basecamp-doctor) | Diagnose Basecamp CLI, authentication, and agent-plugin health. |
-| hey | HEY | [hey-cli](https://github.com/basecamp/hey-cli/tree/main/skills/hey) | Interact with HEY via the HEY CLI. Read and send email; manage contacts, boxes, labels, collections, calendars, todos, habits, time tracking, and journal entries. **Missing from `skills/` right now** (see below). |
+| [hey](skills/hey/SKILL.md) | HEY | [hey-cli](https://github.com/basecamp/hey-cli/tree/main/skills/hey) | Interact with HEY via the HEY CLI. Read and send email; manage contacts, boxes, labels, collections, calendars, todos, habits, time tracking, and journal entries. |
 | fizzy | Fizzy | [fizzy-cli](https://github.com/basecamp/fizzy-cli/tree/master/skills/fizzy) | Interact with Fizzy via the Fizzy CLI. Manage boards, cards, columns, comments, steps, reactions, tags, users, notifications, pins, webhooks, and account settings. **Not published here yet** (see below). |
 
-**hey** is absent because of a sync bug
-([#5](https://github.com/basecamp/skills/issues/5)): the basecamp-cli and
-hey-cli release syncs shared one `.managed-skills` manifest, so each product's
-release deleted the other product's skills. Fixes are in flight in both CLIs.
-The skill returns automatically on the first hey-cli release after that fix
-ships. Until then, get it from
-[hey-cli/skills/hey](https://github.com/basecamp/hey-cli/tree/main/skills/hey),
-or run `hey skill install`, which installs it from the CLI itself.
-
-**fizzy** is not published here yet: fizzy-cli's release has no skills sync.
-One is proposed in
-[fizzy-cli#214](https://github.com/basecamp/fizzy-cli/pull/214); once it ships,
-the skill arrives with the next fizzy-cli release.
-Get it from
+**fizzy** is not published here yet: fizzy-cli's release sync landed in
+[fizzy-cli#214](https://github.com/basecamp/fizzy-cli/pull/214), and the skill
+arrives with the first fizzy-cli release after it. Until then, get it from
 [fizzy-cli/skills/fizzy](https://github.com/basecamp/fizzy-cli/tree/master/skills/fizzy),
 or run `fizzy skill install`.
 

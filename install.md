@@ -42,12 +42,11 @@ basecamp auth status --json | grep -q '"authenticated": true' && echo OK
 
 ## Step 2: Install and sign in to HEY CLI
 
-Only if you use HEY; otherwise mark this TODO done and continue. Run all three lines: the first installs the CLI only when `hey` is not already on PATH (see the [HEY CLI install guide](https://github.com/basecamp/hey-cli/blob/main/docs/install.md) for other install methods), the second signs in only when not already signed in (it opens a browser), and the third installs the hey skill from the CLI itself, since it is temporarily missing from this repo (see the [README](README.md)) — it runs even when the CLI was already installed.
+Only if you use HEY; otherwise mark this TODO done and continue. Run both lines: the first installs the CLI only when `hey` is not already on PATH (see the [HEY CLI install guide](https://github.com/basecamp/hey-cli/blob/main/docs/install.md) for other install methods), and the second signs in only when not already signed in (it opens a browser). The hey skill installs from this repo in Step 4, with the others.
 
 ```bash
 command -v hey >/dev/null || curl -fsSL https://hey.com/install-cli | bash
 hey auth status --json | grep -q '"authenticated": true' || hey auth login
-hey skill install
 ```
 
 **Verify:**
@@ -83,7 +82,7 @@ npx skills add basecamp/skills
 **Verify:**
 ```bash
 npx skills list
-# Expected: basecamp and basecamp-doctor listed (hey too, once it is published here)
+# Expected: the basecamp skills and hey listed
 ```
 
 Restart your agent session to pick up the new skills.
