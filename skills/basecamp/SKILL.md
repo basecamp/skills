@@ -11,6 +11,7 @@ triggers:
   - basecamp subtasks
   - basecamp project
   - project wallpaper
+  - project logo
   - basecamp cards
   - basecamp chat
   - basecamp campfire
@@ -43,6 +44,10 @@ triggers:
   - mark done
   - create todo
   - move card
+  - move to another project
+  - copy to another project
+  - copy todo
+  - copy card
   - download file
   - search basecamp
   - find in basecamp
@@ -126,12 +131,21 @@ apply where supported.
 - Comments are flat. A reply is posted to the parent recording, never to a
   comment ID. For a comment URL, use `comments show` or `comments thread` to get
   `reply_target` when context matters.
-- Respect project context. Check `.basecamp/config.json` before assuming a
-  project; otherwise pass `--in <project>` or the scope shown by leaf help.
+- Respect project context. Before assuming a project, run
+  `basecamp config show --json`: its `project_id` is the effective value across
+  flags, env and every config layer, with its source. Do not read
+  `.basecamp/config.json` directly; it is only one layer. With no `project_id`,
+  pass `--in <project>` or the scope shown by leaf help.
 - Use non-interactive output for agent work. Do not allow an ambiguous picker to
   block execution.
 - When a result reports content or description attachments, download and inspect
   them. Images often contain the essential task context.
+- A move into another container prints the item's new ID; use it afterwards,
+  since the old ID stops taking writes. A copy prints the copy's ID and leaves
+  the original as it was. Never repeat a copy: Basecamp files it in the
+  background, so a copy that is still running or lost its answer may already
+  exist. Check it with the `basecamp filings show <id>` command or the hint it
+  printed, never by copying again.
 - Follow the installed command's help over examples remembered from earlier CLI
   versions.
 
@@ -217,6 +231,10 @@ basecamp pings messages "Jane Smith" --agent
 - A message URL (`/circles/<id>@<line>`) works with `basecamp show` and
   `chat line`; edit or delete such a message with `chat update` or `chat delete`
   on that URL.
+- Nothing in a ping changes through the generic recording commands: `recordings
+  trash`, `archive`, `restore` and `visibility`, `subscriptions add` and
+  `remove`, and `spotlight` are refused (exit 4). Only your own subscription
+  changes there, with `subscriptions subscribe` or `subscriptions unsubscribe`.
 
 ## Spotlights
 
@@ -253,6 +271,28 @@ basecamp projects wallpaper remove --in "<project>" --json
   absent when the project has none; `projects show` carries the same field.
   The URL requires authentication and redirects to the image; it is not a
   public image link.
+
+## Project logo
+
+The logo is the image beside a project's name, separate from its wallpaper. The
+`projects logo` group sets and removes it, for the project in `--in`/`--project`
+or the configured default:
+
+```bash
+basecamp projects logo set brand.png --in "<project>" --json
+basecamp projects logo remove --in "<project>" --json
+```
+
+- People and agents who can edit the project can change its logo. Others get
+  403, and a project the caller cannot see gets 404; do not retry or route
+  around either refusal.
+- The CLI checks the file's size and MIME hint before uploading; leaf help
+  names the limits. Server image validations still apply. Removing a logo from
+  a project that has none succeeds.
+- Each command returns the project. `.data.logo` is `{url}`, and is absent when
+  the project has none; `projects show` carries the same field. The URL
+  requires authentication and redirects to the image; it is not a public image
+  link.
 
 ## Content and stdin
 
