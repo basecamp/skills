@@ -33,11 +33,6 @@ triggers:
 
 # /basecamp-connect: drive your agent from Basecamp
 
-Someone @mentions the agent in Basecamp, assigns it a card or to-do, or pings
-it. This session acknowledges it as the agent within seconds,
-a background subagent does the work in the right repo with your own Claude
-Code setup, and the agent replies in place.
-
 Three pieces:
 
 - **The agent**: a Basecamp person of its own, owned by you, connected to this
@@ -51,8 +46,9 @@ Three pieces:
   acknowledgement, chooses the repo, and dispatches one background subagent
   per request. It never does the work itself.
 
-This flow needs Claude Code. Without it, or with no session open, see
-*Without this session*. The connector runs on Linux and macOS.
+This flow needs Claude Code, with a Monitor tool that takes `persistent`.
+Without either, or with no session open, see *Without this session*. The
+connector runs on Linux and macOS.
 
 ## Running the connector
 
@@ -75,15 +71,16 @@ agent's token yet`, Basecamp's token endpoint is limiting it or failing: it
 retries on its own. Tell the person, leave it running, and arm the monitor;
 restarting doesn't help.
 
-Then arm a persistent monitor on that file with the Monitor tool
-(`persistent: true`), replaying from the start so nothing that arrived between
-the start and the monitor is missed:
+Then arm a monitor on that file with the Monitor tool, **`persistent: true`
+and never a `timeout_ms`**, replaying from the start so nothing that arrived
+between the start and the monitor is missed:
 
 ```bash
 tail -f -n +1 '<connector-output-file>' | grep --line-buffered -F '"type":"request"'
 ```
 
-Single-quote the path, as with every other value.
+Single-quote the path, as with every other value. If it expires, re-arm it
+once, persistent; if that one expires too, tell the person.
 
 Each notification is one request: handle it with *For each request*. A request
 that arrives while you're waiting on the person is not their reply.
@@ -141,8 +138,8 @@ that arrives while you're waiting on the person is not their reply.
 - **`go`**, **`ask`**: the operator's go and the words it approves
   (`subagent.md`).
 
-Every request passed trust and project checks (or is a Ping). A crash just
-after printing can repeat it on restart within a minute: skip any `event_id`
+Every request passed trust and project checks (or is a Ping). A crash can
+repeat it on restart, and a re-armed monitor replays it: skip any `event_id`
 already handled. Other lines (no `type`, or `"type":"event"`) are logs;
 never act on them.
 
@@ -293,7 +290,8 @@ Then go straight back to watching; any number may be in flight.
 
 Keep the terminal quiet: the reply in Basecamp is the record. Speak up only
 for a failure, a refusal, or something the person must decide (a repo to
-pick, a mention that couldn't be posted).
+pick, a mention that couldn't be posted). Speak for the connector alone: never
+say whether anything else here is working.
 
 ## Rules without exceptions
 
@@ -729,7 +727,9 @@ it gives each request to a coding agent it starts (Claude Code, Codex or Pi),
 which follows this same skill and hands the work to a worker, so the agent
 keeps working with no session open. Use it when the person asks for that, and
 whenever you aren't Claude Code: without a monitor and background subagents, a
-session can't watch the connector.
+session can't watch the connector. Nor with a Monitor tool whose monitors all
+expire (no `persistent`): each re-arm replays the whole output file, and a
+compacted session can't tell requests it handled from new ones.
 
 Set up first, as always (*First-time setup*, steps 1 to 4). Then start it, in
 place of *Running the connector*:
@@ -743,6 +743,13 @@ basecamp connect -P '<profile>' --orchestrator <claude|codex|pi>
   `--orchestrator-model`, `--orchestrator-effort`, `--worker-model` and
   `--worker-effort` choose models and effort: pass them only when the person
   asks. Each coding agent named has to be installed and signed in here.
+- **How many at once.** Each request gets a worker as it arrives, with no
+  limit. `--max-workers <n>` caps how many run at once, so a request past
+  the cap waits its turn: pass it only when the person asks for a limit, and
+  `--max-workers 0` to take one off. A cap is read at a start: to change it
+  for a connector already running, stop that connector and start it again
+  with the flag. That is the person's to do when you are the connector's
+  own agent, so give them the command.
 - **Kept for the profile.** What a start names is remembered, so the next
   start is `basecamp connect -P '<profile>' --run`.
 - **It has to outlive you.** It runs in the foreground until stopped. Start it
@@ -794,3 +801,9 @@ same repo on the same coding agent; otherwise a new worker starts. To send diffe
 work to different coding agents (by repo, project, card table or Ping), the
 person writes rules in `runner.json` beside the profile's connect.json:
 `basecamp connect --help` shows them.
+
+To watch it themselves, the person runs `basecamp connect console -P
+'<profile>'` in a terminal of their own. It shows the work and the settings
+as they change, the connector's health as it was when the console opened or
+when they last pressed `r`, and takes what they type to the orchestrator. It
+needs a terminal, so it is theirs to run, not yours.
